@@ -2,7 +2,7 @@
    app.js — NeonCV
    Main application logic: state, rendering, dynamic sections,
    validation, autosave, templates, theme, multi-CV management.
-   Built by Nyan Linnhtet · Neon.dev
+   Neon.dev
    ============================================================ */
 
 /* ---------------------------------------------------------
@@ -10,24 +10,71 @@
    --------------------------------------------------------- */
 
 const PURPOSES = [
-  { key: 'job', label: 'Job Application', icon: '⌁', desc: 'Create a professional CV focused on experience, skills and achievements.' },
-  { key: 'internship', label: 'Internship', icon: '◧', desc: 'Highlight education, projects and potential for employers hiring interns.' },
-  { key: 'scholarship', label: 'Scholarship', icon: '◐', desc: 'Emphasize academic achievement, awards and community involvement.' },
-  { key: 'university', label: 'University Application', icon: '▣', desc: 'Showcase education, research and extracurricular achievements.' },
-  { key: 'freelance', label: 'Freelancing / Consulting', icon: '◈', desc: 'Present your services, skills and selected client-ready projects.' },
-  { key: 'research', label: 'Research / Academic', icon: '▤', desc: 'Detail research experience, publications and conference activity.' },
-  { key: 'general', label: 'General CV', icon: '⎙', desc: 'A balanced, all-purpose professional CV for any situation.' },
+  { key: 'job', label: 'Job Application', icon: '⌁', desc: 'For applying to professional jobs.', bestFor: ['Experience', 'Skills', 'Achievements', 'Projects', 'Education'] },
+  { key: 'internship', label: 'Internship', icon: '◧', desc: 'For students and early-career applicants.', bestFor: ['Education', 'Projects', 'Skills', 'Activities', 'Certifications'] },
+  { key: 'scholarship', label: 'Scholarship', icon: '◐', desc: 'For scholarship and academic funding applications.', bestFor: ['Education', 'Awards', 'Achievements', 'Activities', 'Research'] },
+  { key: 'university', label: 'University Application', icon: '▣', desc: 'For undergraduate or graduate program applications.', bestFor: ['Education', 'Research', 'Publications', 'Awards', 'Activities'] },
+  { key: 'freelance', label: 'Freelancing / Consulting', icon: '◈', desc: 'For pitching your services to clients.', bestFor: ['Skills', 'Services', 'Selected Projects', 'Testimonials'] },
+  { key: 'research', label: 'Research / Academic', icon: '▤', desc: 'For research positions and academic careers.', bestFor: ['Research', 'Publications', 'Conferences', 'Education'] },
+  { key: 'general', label: 'General CV', icon: '⎙', desc: 'A balanced, all-purpose professional CV.', bestFor: ['Experience', 'Education', 'Skills', 'Projects'] },
 ];
 
 const RECOMMENDED_SECTIONS = {
   job: ['personal', 'summary', 'experience', 'skills', 'projects', 'education', 'certifications', 'languages', 'awards'],
-  internship: ['personal', 'summary', 'education', 'projects', 'skills', 'certifications', 'awards', 'volunteer', 'languages'],
+  internship: ['personal', 'summary', 'education', 'skills', 'projects', 'experience', 'certifications', 'volunteer', 'languages'],
   scholarship: ['personal', 'summary', 'education', 'awards', 'projects', 'volunteer', 'certifications', 'languages', 'references'],
   university: ['personal', 'summary', 'education', 'research', 'publications', 'projects', 'awards', 'conferences', 'skills', 'references'],
   freelance: ['personal', 'summary', 'skills', 'experience', 'projects', 'certifications', 'references'],
   research: ['personal', 'summary', 'education', 'research', 'publications', 'conferences', 'projects', 'awards', 'skills', 'references'],
   general: ['personal', 'summary', 'experience', 'education', 'skills', 'projects', 'certifications', 'languages'],
 };
+
+/* ---------- Application context (Step 2) ---------- */
+
+const CONTEXTS = {
+  job: [
+    { key: 'myanmar-local', label: 'Myanmar Local Company', desc: 'For companies hiring within Myanmar.' },
+    { key: 'international', label: 'International Company', desc: 'For international roles.' },
+    { key: 'remote', label: 'Remote / Global', desc: 'For remote opportunities.' },
+    { key: 'general', label: 'General', desc: 'Flexible professional CV.' },
+  ],
+  internship: [
+    { key: 'myanmar-local', label: 'Myanmar Local Company', desc: 'For internships within Myanmar.' },
+    { key: 'international', label: 'International Company', desc: 'For international internships.' },
+    { key: 'remote', label: 'Remote / Global', desc: 'For remote internships.' },
+    { key: 'general', label: 'General', desc: 'Flexible internship CV.' },
+  ],
+  scholarship: [
+    { key: 'local', label: 'Local Scholarship', desc: 'Scholarships offered within Myanmar.' },
+    { key: 'international', label: 'International Scholarship', desc: 'Scholarships abroad.' },
+    { key: 'university', label: 'University Scholarship', desc: 'Awarded directly by a university.' },
+    { key: 'general', label: 'General', desc: 'Flexible scholarship CV.' },
+  ],
+  university: [
+    { key: 'myanmar-university', label: 'Myanmar University', desc: 'Applying to a university in Myanmar.' },
+    { key: 'international-university', label: 'International University', desc: 'Applying abroad.' },
+    { key: 'general-academic', label: 'General Academic', desc: 'Flexible academic CV.' },
+  ],
+  freelance: [
+    { key: 'local-client', label: 'Local Client', desc: 'Clients based in Myanmar.' },
+    { key: 'international-client', label: 'International Client', desc: 'Clients abroad.' },
+    { key: 'remote-platform', label: 'Remote Platform', desc: 'Upwork, Fiverr and similar platforms.' },
+    { key: 'general', label: 'General', desc: 'Flexible freelance CV.' },
+  ],
+  research: [
+    { key: 'university-research', label: 'University Research', desc: 'A research role within a university.' },
+    { key: 'research-grant', label: 'Research Grant', desc: 'Applying for a research grant or funding.' },
+    { key: 'academic-position', label: 'Academic Position', desc: 'A faculty or teaching-research position.' },
+    { key: 'general', label: 'General', desc: 'Flexible research CV.' },
+  ],
+  general: [
+    { key: 'general', label: 'General', desc: 'A flexible, all-purpose CV.' },
+  ],
+};
+
+// Contexts where Myanmar-specific personal fields (NRC, etc.) make sense.
+const MYANMAR_CONTEXT_KEYS = ['myanmar-local', 'local', 'myanmar-university', 'local-client'];
+function isMyanmarContext(contextKey) { return MYANMAR_CONTEXT_KEYS.includes(contextKey); }
 
 // Every section that can ever appear, in a sensible default order.
 const ALL_SECTIONS = ['personal', 'summary', 'experience', 'internship', 'education', 'skills', 'projects', 'certifications', 'awards', 'languages', 'volunteer', 'research', 'publications', 'conferences', 'references'];
@@ -110,7 +157,7 @@ const LIST_SCHEMA = {
       { name: 'name', label: 'Certificate Name', type: 'text', required: true },
       { name: 'organization', label: 'Issuing Organization', type: 'text' },
       { name: 'issueDate', label: 'Issue Date', type: 'month' },
-      { name: 'credentialUrl', label: 'Credential URL', type: 'url' },
+      { name: 'credentialUrl', label: 'Certificate Link (optional)', type: 'url' },
     ],
     title: (e) => e.name || 'New certificate',
     subtitle: (e) => e.organization,
@@ -196,11 +243,139 @@ const LIST_SCHEMA = {
 const LIST_SECTION_KEYS = Object.keys(LIST_SCHEMA);
 
 /* ---------------------------------------------------------
+   1b. SAMPLE CV DATA (per purpose, used by "Use a Sample CV")
+   --------------------------------------------------------- */
+
+function sampleEntry(fields) { return Object.assign({ id: uid() }, fields); }
+
+const SAMPLES = {
+  job: {
+    personal: { fullName: 'Alex Morgan', jobTitle: 'Frontend Developer', email: 'alex.morgan@email.com', phone: '+95 9 123 456 789', location: 'Yangon, Myanmar', website: 'alexmorgan.dev', linkedin: 'linkedin.com/in/alexmorgan', github: 'alexmorgan.dev' },
+    summary: 'Frontend developer with 3+ years building responsive, accessible web applications. Comfortable owning features from design handoff to deployment, and enjoy mentoring junior teammates.',
+    skills: { technical: ['JavaScript', 'React', 'Tailwind CSS', 'Git'], soft: ['Communication', 'Problem-solving', 'Teamwork'] },
+    entries: {
+      experience: [sampleEntry({ jobTitle: 'Frontend Developer', company: 'Bright Web Studio', location: 'Yangon', startDate: '2023-02', endDate: '', current: true, description: 'Built and maintained client websites using React and Tailwind CSS.\nCollaborated with designers to implement pixel-accurate, responsive layouts.\nImproved page load speed by 35% through code-splitting and image optimization.' })],
+      education: [sampleEntry({ degree: 'B.Sc. Computer Science', institution: 'University of Yangon', location: 'Yangon', startDate: '2018-11', endDate: '2022-12', description: '' })],
+      projects: [sampleEntry({ name: 'Student Management System', description: 'A web app for tracking student records, attendance and grades for a small training center.', technologies: 'React, Node.js, MySQL', githubUrl: '', liveUrl: '' })],
+      certifications: [sampleEntry({ name: 'Meta Front-End Developer', organization: 'Coursera', issueDate: '2023-06', credentialUrl: '' })],
+      languages: [sampleEntry({ language: 'Burmese', proficiency: 'Native' }), sampleEntry({ language: 'English', proficiency: 'Professional working proficiency' })],
+    },
+  },
+  internship: {
+    personal: { fullName: 'Alex Morgan', jobTitle: 'Computer Science Student', email: 'alex.morgan@email.com', phone: '+95 9 123 456 789', location: 'Yangon, Myanmar', website: '', linkedin: 'linkedin.com/in/alexmorgan', github: '' },
+    summary: 'Motivated Computer Science student with hands-on experience building web applications and working with JavaScript and Java. Looking for an internship to apply classroom knowledge to real projects.',
+    skills: { technical: ['JavaScript', 'HTML', 'CSS', 'Java', 'MySQL'], soft: ['Fast learner', 'Teamwork'] },
+    entries: {
+      education: [sampleEntry({ degree: 'B.Sc. Computer Science', institution: 'Example University', location: 'Yangon', startDate: '2023-11', endDate: '', description: 'Currently in 3rd year, GPA 3.7/4.0.' })],
+      projects: [sampleEntry({ name: 'Student Management System', description: 'Built a web-based management system for tracking student records and grades as a class project.', technologies: 'JavaScript, HTML, CSS, MySQL', githubUrl: '', liveUrl: '' })],
+      certifications: [sampleEntry({ name: 'Introduction to Web Development', organization: 'freeCodeCamp', issueDate: '2024-03', credentialUrl: '' })],
+      volunteer: [sampleEntry({ organization: 'University Coding Club', role: 'Member', date: '2023 – Present', description: 'Help organize weekly coding practice sessions for first-year students.' })],
+    },
+  },
+  scholarship: {
+    personal: { fullName: 'Su Su Hlaing', jobTitle: 'High School Graduate', email: 'susuhlaing@email.com', phone: '+95 9 123 456 789', location: 'Mandalay, Myanmar', website: '', linkedin: '', github: '' },
+    summary: 'Dedicated student graduating top of class with a strong record in mathematics and community service. Seeking a scholarship to pursue a degree in Economics.',
+    skills: { technical: ['Microsoft Excel', 'Data Analysis'], soft: ['Leadership', 'Public speaking'] },
+    entries: {
+      education: [sampleEntry({ degree: 'High School Diploma', institution: 'BEHS No. 2 Mandalay', location: 'Mandalay', startDate: '2021-06', endDate: '2025-03', description: 'Ranked 2nd in class of 210 students.' })],
+      awards: [sampleEntry({ title: 'Best Student in Mathematics', organization: 'BEHS No. 2 Mandalay', date: '2024-12', description: '' })],
+      volunteer: [sampleEntry({ organization: 'Local Youth Center', role: 'Volunteer Tutor', date: '2023 – Present', description: 'Tutor younger students in mathematics twice a week.' })],
+      projects: [sampleEntry({ name: 'School Recycling Initiative', description: 'Co-led a student-run recycling program that reduced school waste by an estimated 20%.', technologies: '', githubUrl: '', liveUrl: '' })],
+    },
+  },
+  university: {
+    personal: { fullName: 'Su Su Hlaing', jobTitle: 'Prospective Economics Student', email: 'susuhlaing@email.com', phone: '+95 9 123 456 789', location: 'Mandalay, Myanmar', website: '', linkedin: '', github: '' },
+    summary: 'Motivated student with a strong academic record and a growing interest in development economics, seeking to continue studies at the undergraduate level.',
+    skills: { technical: ['Microsoft Excel', 'Statistics'], soft: ['Research', 'Critical thinking'] },
+    entries: {
+      education: [sampleEntry({ degree: 'High School Diploma', institution: 'BEHS No. 2 Mandalay', location: 'Mandalay', startDate: '2021-06', endDate: '2025-03', description: 'Ranked 2nd in class of 210 students.' })],
+      research: [sampleEntry({ title: 'The Impact of Microfinance on Rural Households', organization: 'School research project', date: '2024', description: 'Independent research project analyzing microfinance access in three villages near Mandalay.' })],
+      awards: [sampleEntry({ title: 'Best Student in Mathematics', organization: 'BEHS No. 2 Mandalay', date: '2024-12', description: '' })],
+    },
+  },
+  freelance: {
+    personal: { fullName: 'Kyaw Zin Latt', jobTitle: 'Freelance Graphic Designer', email: 'kyawzinlatt@email.com', phone: '+95 9 123 456 789', location: 'Yangon, Myanmar', website: 'kyawzinlatt.design', linkedin: '', github: '' },
+    summary: 'Freelance graphic designer with 4+ years helping small businesses build clear, memorable visual identities — from logos to full brand guidelines.',
+    skills: { technical: ['Adobe Illustrator', 'Photoshop', 'Figma', 'Branding'], soft: ['Client communication', 'Time management'] },
+    entries: {
+      experience: [sampleEntry({ jobTitle: 'Freelance Graphic Designer', company: 'Self-employed', location: 'Remote', startDate: '2021-01', endDate: '', current: true, description: 'Designed brand identities, packaging and marketing materials for 30+ small business clients across Myanmar and Southeast Asia.' })],
+      projects: [sampleEntry({ name: 'Cafe Ywar Ma Brand Identity', description: 'Full brand identity for a local cafe chain, including logo, menu design and packaging.', technologies: 'Illustrator, Photoshop', githubUrl: '', liveUrl: '' })],
+      certifications: [sampleEntry({ name: 'Graphic Design Specialization', organization: 'Coursera', issueDate: '2022-05', credentialUrl: '' })],
+    },
+  },
+  research: {
+    personal: { fullName: 'Dr. Thida Win', jobTitle: 'Research Assistant', email: 'thidawin@email.com', phone: '+95 9 123 456 789', location: 'Yangon, Myanmar', website: '', linkedin: 'linkedin.com/in/thidawin', github: '' },
+    summary: 'Research assistant with a background in environmental science, focused on water quality monitoring and community-based conservation projects.',
+    skills: { technical: ['Statistical Analysis', 'R', 'Field Sampling'], soft: ['Scientific writing', 'Collaboration'] },
+    entries: {
+      education: [sampleEntry({ degree: 'M.Sc. Environmental Science', institution: 'Yangon University', location: 'Yangon', startDate: '2020-11', endDate: '2022-12', description: '' })],
+      research: [sampleEntry({ title: 'Water Quality Monitoring of the Yangon River Basin', organization: 'Yangon University', date: '2022 – Present', description: 'Leading a two-year study on seasonal water quality variation and its impact on nearby communities.' })],
+      publications: [sampleEntry({ title: 'Seasonal Trends in River Water Quality: A Case Study', publisher: 'Journal of Environmental Studies', date: '2023', url: '' })],
+      conferences: [sampleEntry({ name: 'Southeast Asia Environmental Science Conference', role: 'Poster presenter', date: '2023' })],
+    },
+  },
+  general: {
+    personal: { fullName: 'Alex Morgan', jobTitle: 'Professional', email: 'alex.morgan@email.com', phone: '+95 9 123 456 789', location: 'Yangon, Myanmar', website: '', linkedin: 'linkedin.com/in/alexmorgan', github: '' },
+    summary: 'Reliable, detail-oriented professional with a track record of taking on new responsibilities and delivering consistent results.',
+    skills: { technical: ['Microsoft Office', 'Project Coordination'], soft: ['Communication', 'Adaptability'] },
+    entries: {
+      experience: [sampleEntry({ jobTitle: 'Coordinator', company: 'Example Company', location: 'Yangon', startDate: '2022-01', endDate: '', current: true, description: 'Coordinated daily operations across three departments and maintained key records.' })],
+      education: [sampleEntry({ degree: 'B.A. Business Administration', institution: 'University of Yangon', location: 'Yangon', startDate: '2017-11', endDate: '2021-12', description: '' })],
+    },
+  },
+};
+
+const INTERNATIONAL_LOCATIONS = {
+  job: 'Singapore',
+  internship: 'Singapore',
+  scholarship: 'Boston, USA',
+  university: 'Boston, USA',
+  freelance: 'Remote',
+  research: 'Berlin, Germany',
+  general: 'Remote',
+};
+
+/**
+ * Merge sample content for the given purpose into a freshly-created CV.
+ * Adapts contact details to the chosen context: Myanmar contexts get a
+ * local phone format and a (hidden-by-default) NRC; international/remote
+ * contexts get an international location, phone format, and stronger
+ * emphasis on LinkedIn/portfolio links. A plain "general" context is left
+ * as-authored, since it's meant to be flexible either way.
+ */
+function applySampleData(cv, purposeKey, contextKey) {
+  const sample = SAMPLES[purposeKey] || SAMPLES.general;
+  cv.personal = Object.assign({}, cv.personal, sample.personal);
+  cv.summary = sample.summary;
+  cv.skills = { technical: sample.skills.technical.slice(), soft: sample.skills.soft.slice() };
+  LIST_SECTION_KEYS.forEach((key) => {
+    cv.entries[key] = (sample.entries[key] || []).map((e) => Object.assign({ id: uid() }, e));
+  });
+
+  const myanmar = isMyanmarContext(contextKey);
+  const international = !myanmar && contextKey !== 'general';
+
+  if (myanmar) {
+    cv.personal.nrc = '12/AhMaYa(N)123456';
+    cv.personal.showNrc = false; // stored, not shown, until the user opts in
+    cv.personal.phone = cv.personal.phone || '+95 9 123 456 789';
+  } else if (international) {
+    cv.personal.location = INTERNATIONAL_LOCATIONS[purposeKey] || 'Remote';
+    cv.personal.phone = '+1 555 123 4567';
+    cv.personal.website = cv.personal.website || 'yourportfolio.com';
+    cv.personal.linkedin = cv.personal.linkedin || 'linkedin.com/in/yourname';
+    cv.personal.nrc = '';
+    cv.personal.showNrc = false;
+  }
+}
+
+/* ---------------------------------------------------------
    2. STATE
    --------------------------------------------------------- */
 
 let state = {
   currentCV: null,
+  draft: { purpose: null, context: null },
   activePurposeFilter: null,
   activeSectionKey: 'personal',
   saveTimer: null,
@@ -208,7 +383,7 @@ let state = {
   confirmAction: null,
 };
 
-function blankCV(purposeKey) {
+function blankCV(purposeKey, contextKey, useSample) {
   const now = Date.now();
   const recommended = RECOMMENDED_SECTIONS[purposeKey] || RECOMMENDED_SECTIONS.general;
   const enabled = {};
@@ -217,16 +392,21 @@ function blankCV(purposeKey) {
   const entries = {};
   LIST_SECTION_KEYS.forEach((key) => { entries[key] = []; });
 
-  return {
+  const cv = {
     id: 'cv_' + now + '_' + Math.random().toString(36).slice(2, 8),
     title: purposeLabel(purposeKey) + ' CV',
     purpose: purposeKey,
+    context: contextKey || 'general',
     template: 'modern',
     createdAt: now,
     updatedAt: now,
     personal: {
       fullName: '', jobTitle: '', email: '', phone: '', location: '',
-      website: '', linkedin: '', github: '', photo: '',
+      website: '', linkedin: '', github: '',
+      photo: '', showPhoto: true, photoShape: 'circle',
+      nrc: '', showNrc: false,
+      dateOfBirth: '', showDateOfBirth: false,
+      gender: '', showGender: false,
     },
     summary: '',
     skills: { technical: [], soft: [] },
@@ -234,11 +414,43 @@ function blankCV(purposeKey) {
     sectionEnabled: enabled,
     entries,
   };
+
+  if (useSample) applySampleData(cv, purposeKey, contextKey);
+
+  return cv;
+}
+
+/**
+ * Fill required-but-missing fields on a CV loaded from LocalStorage,
+ * so older saved CVs stay compatible with newer app versions.
+ */
+function normalizeCV(cv) {
+  if (!cv) return cv;
+  cv.context = cv.context || 'general';
+  cv.personal = cv.personal || {};
+  const p = cv.personal;
+  if (p.photo === undefined) p.photo = '';
+  if (p.showPhoto === undefined) p.showPhoto = true;
+  if (p.photoShape === undefined) p.photoShape = 'circle';
+  if (p.nrc === undefined) p.nrc = '';
+  if (p.showNrc === undefined) p.showNrc = false;
+  if (p.dateOfBirth === undefined) p.dateOfBirth = '';
+  if (p.showDateOfBirth === undefined) p.showDateOfBirth = false;
+  if (p.gender === undefined) p.gender = '';
+  if (p.showGender === undefined) p.showGender = false;
+  LIST_SECTION_KEYS.forEach((key) => { if (!cv.entries[key]) cv.entries[key] = []; });
+  return cv;
 }
 
 function purposeLabel(key) {
   const p = PURPOSES.find((p) => p.key === key);
   return p ? p.label : 'General';
+}
+
+function contextLabel(purposeKey, contextKey) {
+  const list = CONTEXTS[purposeKey] || CONTEXTS.general;
+  const c = list.find((c) => c.key === contextKey);
+  return c ? c.label : 'General';
 }
 
 /* ---------------------------------------------------------
@@ -253,6 +465,16 @@ function formatMonth(value) {
   if (!y || !m) return value;
   const d = new Date(Number(y), Number(m) - 1);
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function formatDate(value) {
+  if (!value) return '';
+  const parts = value.split('-');
+  if (parts.length !== 3) return value;
+  const [y, m, d] = parts;
+  const dt = new Date(Number(y), Number(m) - 1, Number(d));
+  if (isNaN(dt.getTime())) return value;
+  return dt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function dateRange(start, end, current) {
@@ -272,6 +494,21 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function nl2br(str) { return escapeHtml(str).replace(/\n/g, '<br>'); }
+
+/**
+ * NRC number is stored as one string ("12/AhMaYa(N)123456") but edited
+ * as four separate inputs (state code / township / type letter / number).
+ */
+function parseNrc(value) {
+  const m = String(value || '').match(/^(\d{1,2})\/([^\(\/]*)\(([A-Za-z]?)\)(\d{0,6})$/);
+  if (!m) return { state: '', township: '', type: '', number: '' };
+  return { state: m[1] || '', township: m[2] || '', type: m[3] || '', number: m[4] || '' };
+}
+function combineNrc(parts) {
+  const { state, township, type, number } = parts;
+  if (!state && !township && !type && !number) return '';
+  return `${state}/${township}(${type})${number}`;
+}
 
 /* ---------------------------------------------------------
    4. TOASTS
@@ -319,12 +556,13 @@ function showView(name) {
   document.getElementById('view-' + name).classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (name === 'purpose') renderPurposeGrid();
+  if (name === 'context') renderContextGrid();
   if (name === 'saved') renderSavedList();
   document.getElementById('app-footer').classList.toggle('hidden', name === 'editor');
 }
 
 /* ---------------------------------------------------------
-   7. LANDING: purpose chips + hero typer
+   7. LANDING: purpose chips
    --------------------------------------------------------- */
 
 function renderLandingChips() {
@@ -337,7 +575,7 @@ function renderLandingChips() {
 }
 
 /* ---------------------------------------------------------
-   8. PURPOSE SELECTION VIEW
+   8. CV CREATION FLOW — Purpose → Context → Start method
    --------------------------------------------------------- */
 
 function renderPurposeGrid() {
@@ -346,19 +584,43 @@ function renderPurposeGrid() {
     <button data-purpose="${p.key}" class="purpose-card text-left p-5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] hover:border-violet hover:shadow-[0_0_0_1px_rgba(124,58,237,0.4)] transition">
       <div class="w-10 h-10 rounded-lg bg-violet/10 flex items-center justify-center text-lg text-violet-bright mb-4">${p.icon}</div>
       <h3 class="font-semibold mb-1.5">${p.label}</h3>
-      <p class="text-sm text-[#64748B] leading-relaxed">${p.desc}</p>
+      <p class="text-sm text-[#64748B] leading-relaxed mb-3">${p.desc}</p>
+      <p class="text-xs text-[#64748B]"><span class="font-semibold text-violet-bright">Best for:</span> ${p.bestFor.join(', ')}</p>
     </button>
   `).join('');
   el.querySelectorAll('[data-purpose]').forEach((btn) => {
-    btn.addEventListener('click', () => createNewCV(btn.dataset.purpose));
+    btn.addEventListener('click', () => {
+      state.draft = { purpose: btn.dataset.purpose };
+      showView('context');
+    });
   });
 }
 
-function createNewCV(purposeKey) {
-  state.currentCV = blankCV(purposeKey);
+function renderContextGrid() {
+  const purposeKey = (state.draft && state.draft.purpose) || 'general';
+  const list = CONTEXTS[purposeKey] || CONTEXTS.general;
+  const el = document.getElementById('context-grid');
+  el.innerHTML = list.map((c) => `
+    <button data-context="${c.key}" class="text-left p-5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] hover:border-violet hover:shadow-[0_0_0_1px_rgba(124,58,237,0.4)] transition">
+      <h3 class="font-semibold mb-1.5">${c.label}</h3>
+      <p class="text-sm text-[#64748B] leading-relaxed">${c.desc}</p>
+    </button>
+  `).join('');
+  el.querySelectorAll('[data-context]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.draft.context = btn.dataset.context;
+      showView('start');
+    });
+  });
+}
+
+function createNewCV(useSample) {
+  const { purpose, context } = state.draft;
+  state.currentCV = blankCV(purpose, context, useSample);
   state.activeSectionKey = 'personal';
   saveCV(state.currentCV);
   enterEditor();
+  if (useSample) showToast('Sample CV loaded — edit anything you like', 'success');
 }
 
 /* ---------------------------------------------------------
@@ -366,7 +628,7 @@ function createNewCV(purposeKey) {
    --------------------------------------------------------- */
 
 function renderSavedList() {
-  const cvs = getAllCVs().sort((a, b) => b.updatedAt - a.updatedAt);
+  const cvs = getAllCVs().map(normalizeCV).sort((a, b) => b.updatedAt - a.updatedAt);
   const list = document.getElementById('saved-cv-list');
   const empty = document.getElementById('saved-empty-state');
   empty.classList.toggle('hidden', cvs.length > 0);
@@ -386,7 +648,7 @@ function renderSavedList() {
   `).join('');
 
   list.querySelectorAll('[data-open]').forEach((btn) => btn.addEventListener('click', () => {
-    state.currentCV = loadCV(btn.dataset.open);
+    state.currentCV = normalizeCV(loadCV(btn.dataset.open));
     state.activeSectionKey = 'personal';
     enterEditor();
   }));
@@ -417,12 +679,13 @@ function renderSavedList() {
 
 function enterEditor() {
   document.getElementById('cv-title-input').value = state.currentCV.title;
-  document.getElementById('editor-purpose-label').textContent = purposeLabel(state.currentCV.purpose);
+  document.getElementById('editor-purpose-label').textContent = purposeLabel(state.currentCV.purpose) + ' · ' + contextLabel(state.currentCV.purpose, state.currentCV.context);
   setMobileTab('edit');
   showView('editor');
   renderSectionNav();
   renderSectionForm();
   renderCVPreview();
+  renderReadinessPanel();
 }
 
 function setMobileTab(tab) {
@@ -530,6 +793,51 @@ function renderSectionForm() {
   });
 }
 
+function templateMiniSvg(key) {
+  if (key === 'classic') {
+    return `<svg viewBox="0 0 60 84" class="w-full h-auto">
+      <rect width="60" height="84" fill="#fff"/>
+      <rect x="18" y="8" width="24" height="3" fill="#111827"/>
+      <rect x="21" y="13" width="18" height="2" fill="#6B7280"/>
+      <rect x="4" y="19" width="52" height="1" fill="#111827"/>
+      <rect x="22" y="25" width="16" height="2" fill="#111827"/>
+      <rect x="6" y="30" width="48" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="33" width="40" height="1.2" fill="#CBD5E1"/>
+      <rect x="22" y="41" width="16" height="2" fill="#111827"/>
+      <rect x="6" y="46" width="48" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="49" width="34" height="1.2" fill="#CBD5E1"/>
+    </svg>`;
+  }
+  if (key === 'academic') {
+    return `<svg viewBox="0 0 60 84" class="w-full h-auto">
+      <rect width="60" height="84" fill="#fff"/>
+      <rect x="6" y="8" width="26" height="3" fill="#0B1220"/>
+      <rect x="6" y="13" width="18" height="2" fill="#475569"/>
+      <circle cx="49" cy="12" r="6" fill="#E2E8F0"/>
+      <rect x="6" y="22" width="48" height="1.4" fill="#334155"/>
+      <rect x="6" y="27" width="20" height="4" fill="#F1F5F9"/>
+      <rect x="6" y="34" width="48" height="1.2" fill="#E2E8F0"/>
+      <rect x="6" y="37" width="42" height="1.2" fill="#E2E8F0"/>
+      <rect x="6" y="46" width="20" height="4" fill="#F1F5F9"/>
+      <rect x="6" y="53" width="48" height="1.2" fill="#E2E8F0"/>
+    </svg>`;
+  }
+  // modern (default)
+  return `<svg viewBox="0 0 60 84" class="w-full h-auto">
+    <rect width="60" height="84" fill="#fff"/>
+    <circle cx="12" cy="12" r="6" fill="#DDD6FE"/>
+    <rect x="22" y="8" width="26" height="3" fill="#0F172A"/>
+    <rect x="22" y="13" width="18" height="2" fill="#A855F7"/>
+    <rect x="6" y="23" width="48" height="1.4" fill="#EDE9FE"/>
+    <rect x="6" y="29" width="14" height="2" fill="#A855F7"/>
+    <rect x="6" y="33" width="48" height="1.2" fill="#E2E8F0"/>
+    <rect x="6" y="36" width="40" height="1.2" fill="#E2E8F0"/>
+    <rect x="6" y="45" width="14" height="2" fill="#A855F7"/>
+    <rect x="6" y="49" width="48" height="1.2" fill="#E2E8F0"/>
+    <rect x="6" y="52" width="30" height="1.2" fill="#E2E8F0"/>
+  </svg>`;
+}
+
 function renderTemplatePickerIfPersonal(key) {
   if (key !== 'personal') return '';
   const templates = [
@@ -542,8 +850,9 @@ function renderTemplatePickerIfPersonal(key) {
       <p class="text-sm font-semibold mb-3">Template</p>
       <div class="grid grid-cols-3 gap-2">
         ${templates.map((t) => `
-          <button data-template="${t.key}" class="template-btn px-3 py-2.5 rounded-lg border text-sm font-medium transition ${state.currentCV.template === t.key ? 'border-violet bg-violet/10 text-violet-bright' : 'border-black/10 dark:border-white/10 hover:border-violet'}">
-            ${t.label}
+          <button data-template="${t.key}" class="template-btn rounded-lg border overflow-hidden text-center transition ${state.currentCV.template === t.key ? 'border-violet ring-1 ring-violet' : 'border-black/10 dark:border-white/10 hover:border-violet'}">
+            <span class="block bg-[#F1F5F9] dark:bg-[#1A1D29] p-1.5">${templateMiniSvg(t.key)}</span>
+            <span class="block py-1.5 text-xs font-medium ${state.currentCV.template === t.key ? 'text-violet-bright' : ''}">${t.label}</span>
           </button>
         `).join('')}
       </div>
@@ -551,34 +860,165 @@ function renderTemplatePickerIfPersonal(key) {
   `;
 }
 
+/* ---------- Required / Recommended / Optional badges ---------- */
+
+function fieldLevel(name, contextKey) {
+  const myanmar = isMyanmarContext(contextKey);
+  const levels = {
+    fullName: 'required',
+    email: 'required',
+    phone: myanmar ? 'required' : 'recommended',
+    location: myanmar ? 'required' : 'recommended',
+    jobTitle: 'recommended',
+    linkedin: 'recommended',
+    website: 'optional',
+    github: 'optional',
+    photo: myanmar ? 'recommended' : 'optional',
+    nrc: 'recommended',
+    dateOfBirth: 'optional',
+    gender: 'optional',
+  };
+  return levels[name] || 'optional';
+}
+
+function levelBadge(level) {
+  const map = {
+    required: 'text-red-500',
+    recommended: 'text-amber-600 dark:text-amber-400',
+    optional: 'text-[#94A3B8]',
+  };
+  const text = { required: 'Required', recommended: 'Recommended', optional: 'Optional' }[level];
+  return `<span class="text-[10px] font-semibold uppercase tracking-wide ${map[level]}">${text}</span>`;
+}
+
 function renderPersonalForm() {
-  const p = state.currentCV.personal;
+  const cv = state.currentCV;
+  const p = cv.personal;
   const field = (name, label, type = 'text', placeholder = '') => `
     <div>
-      <label class="block text-xs font-semibold text-[#64748B] mb-1.5">${label}</label>
+      <div class="flex items-center justify-between mb-1.5">
+        <label class="block text-xs font-semibold text-[#64748B]">${label}</label>
+        ${levelBadge(fieldLevel(name, cv.context))}
+      </div>
       <input data-personal="${name}" type="${type}" value="${escapeHtml(p[name])}" placeholder="${placeholder}"
         class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
       <p data-error-for="${name}" class="text-xs text-red-500 mt-1 hidden"></p>
     </div>
   `;
-  return `
-    <div class="space-y-4">
-      ${field('fullName', 'Full Name *')}
-      ${field('jobTitle', 'Professional Title')}
-      ${field('email', 'Email *', 'email')}
-      ${field('phone', 'Phone')}
-      ${field('location', 'Location')}
-      ${field('website', 'Website', 'text', 'yourname.com')}
-      ${field('linkedin', 'LinkedIn', 'text', 'linkedin.com/in/you')}
-      ${field('github', 'Portfolio', 'text', 'yourportfolio.com')}
+
+  const photoBlock = `
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <label class="block text-xs font-semibold text-[#64748B]">Profile Photo</label>
+        ${levelBadge(fieldLevel('photo', cv.context))}
+      </div>
+      <div class="flex items-center gap-4">
+        <div id="photo-preview" class="w-20 h-20 shrink-0 bg-black/5 dark:bg-white/5 border border-dashed border-black/15 dark:border-white/15 flex items-center justify-center overflow-hidden text-[#94A3B8] text-xs ${photoShapeClass(p.photoShape)}">
+          ${p.photo ? `<img src="${p.photo}" alt="Profile photo" class="w-full h-full object-cover">` : 'No photo'}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap gap-2 mb-2">
+            <label class="cursor-pointer px-3 py-2 rounded-lg border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold transition">
+              ${p.photo ? 'Change Photo' : 'Upload Photo'}
+              <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
+            </label>
+            ${p.photo ? `<button id="btn-remove-photo" class="px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition">Remove</button>` : ''}
+          </div>
+          <div class="flex items-center gap-1.5 mb-2">
+            ${['circle', 'rounded', 'square'].map((shape) => `
+              <button data-photo-shape="${shape}" class="w-7 h-7 flex items-center justify-center border text-[10px] transition ${p.photoShape === shape ? 'border-violet text-violet-bright' : 'border-black/10 dark:border-white/10 text-[#94A3B8]'} ${shape === 'circle' ? 'rounded-full' : shape === 'rounded' ? 'rounded-md' : 'rounded-none'}">${shape[0].toUpperCase()}</button>
+            `).join('')}
+          </div>
+          <label class="flex items-center gap-2 text-xs cursor-pointer select-none text-[#64748B]">
+            <input type="checkbox" data-personal-check="showPhoto" ${p.showPhoto ? 'checked' : ''} class="w-3.5 h-3.5 rounded accent-violet">
+            Show photo on CV
+          </label>
+          <p class="text-[11px] text-[#94A3B8] mt-1">JPG, PNG or WEBP, up to 2 MB.</p>
+        </div>
+      </div>
     </div>
   `;
+
+  const myanmarBlock = isMyanmarContext(cv.context) ? `
+    <div class="pt-4 border-t border-black/5 dark:border-white/10 space-y-4">
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block text-xs font-semibold text-[#64748B]">NRC Number</label>
+          ${levelBadge(fieldLevel('nrc', cv.context))}
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input data-nrc-part="state" type="text" inputmode="numeric" maxlength="2" value="${escapeHtml(parseNrc(p.nrc).state)}" placeholder="12"
+            class="w-11 px-1 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm text-center focus:outline-none focus:border-violet transition">
+          <span class="text-[#94A3B8] text-sm">/</span>
+          <input data-nrc-part="township" type="text" maxlength="8" value="${escapeHtml(parseNrc(p.nrc).township)}" placeholder="ဗဟန"
+            class="w-16 px-1 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm text-center focus:outline-none focus:border-violet transition">
+          <span class="text-[#94A3B8] text-sm">(</span>
+          <input data-nrc-part="type" type="text" maxlength="1" value="${escapeHtml(parseNrc(p.nrc).type)}" placeholder="N"
+            class="w-9 px-1 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm text-center uppercase focus:outline-none focus:border-violet transition">
+          <span class="text-[#94A3B8] text-sm">)</span>
+          <input data-nrc-part="number" type="text" inputmode="numeric" maxlength="6" value="${escapeHtml(parseNrc(p.nrc).number)}" placeholder="123456"
+            class="w-24 flex-1 px-2 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm text-center focus:outline-none focus:border-violet transition">
+        </div>
+        <p data-error-for="nrc" class="text-xs text-red-500 mt-1 hidden"></p>
+        <label class="flex items-center gap-2 text-xs cursor-pointer select-none text-[#64748B] mt-1.5">
+          <input type="checkbox" data-personal-check="showNrc" ${p.showNrc ? 'checked' : ''} class="w-3.5 h-3.5 rounded accent-violet">
+          Show NRC on CV
+        </label>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block text-xs font-semibold text-[#64748B]">Date of Birth</label>
+          ${levelBadge(fieldLevel('dateOfBirth', cv.context))}
+        </div>
+        <input data-personal="dateOfBirth" type="date" value="${escapeHtml(p.dateOfBirth)}"
+          class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
+        <label class="flex items-center gap-2 text-xs cursor-pointer select-none text-[#64748B] mt-1.5">
+          <input type="checkbox" data-personal-check="showDateOfBirth" ${p.showDateOfBirth ? 'checked' : ''} class="w-3.5 h-3.5 rounded accent-violet">
+          Show date of birth on CV
+        </label>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block text-xs font-semibold text-[#64748B]">Gender</label>
+          ${levelBadge(fieldLevel('gender', cv.context))}
+        </div>
+        <input data-personal="gender" type="text" value="${escapeHtml(p.gender)}" placeholder="e.g. Male, Female"
+          class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
+        <label class="flex items-center gap-2 text-xs cursor-pointer select-none text-[#64748B] mt-1.5">
+          <input type="checkbox" data-personal-check="showGender" ${p.showGender ? 'checked' : ''} class="w-3.5 h-3.5 rounded accent-violet">
+          Show gender on CV
+        </label>
+      </div>
+    </div>
+  ` : '';
+
+  return `
+    <div class="space-y-4">
+      ${photoBlock}
+      ${field('fullName', 'Full Name')}
+      ${field('jobTitle', 'Professional Title')}
+      ${field('email', 'Email', 'email')}
+      ${field('phone', 'Phone')}
+      ${field('location', 'Location')}
+      ${field('linkedin', 'LinkedIn', 'text', 'linkedin.com/in/you')}
+      ${field('website', 'Website', 'text', 'yourname.com')}
+      ${field('github', 'Portfolio', 'text', 'yourportfolio.com')}
+      ${myanmarBlock}
+    </div>
+  `;
+}
+
+function photoShapeClass(shape) {
+  if (shape === 'square') return 'rounded-none';
+  if (shape === 'rounded') return 'rounded-lg';
+  return 'rounded-full';
 }
 
 function renderSummaryForm() {
   const cv = state.currentCV;
   return `
     <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Professional Summary</label>
+    <p class="text-xs text-[#64748B] leading-relaxed mb-2">Briefly explain who you are, what you do, and what opportunity you're looking for.<br>Example: "Computer Science student with experience developing web applications..."</p>
     <textarea data-summary rows="8" maxlength="600" placeholder="A short, punchy introduction of who you are and what you bring."
       class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition resize-none">${escapeHtml(cv.summary)}</textarea>
     <p class="text-xs text-[#64748B] mt-1"><span id="summary-count">${cv.summary.length}</span>/600</p>
@@ -608,15 +1048,33 @@ function renderSkillsForm() {
   return tagGroup('technical', 'Core Skills') + tagGroup('soft', 'Soft Skills');
 }
 
+// Beginner-friendly helper tips shown above a section's form.
+const SECTION_HELP = {
+  experience: 'Tip: start bullet points with action words — Developed, Designed, Managed, Implemented, Improved, Created.',
+  internship: 'Tip: start bullet points with action words — Developed, Designed, Managed, Implemented, Improved, Created.',
+  projects: 'Tip: explain what you built, what problem it solved, and which tools or skills you used.',
+};
+
+// Friendlier empty-state copy for sections a beginner might not have content for yet.
+const SECTION_SKIP_HELP = {
+  experience: "Don't have work experience yet? That's okay — you can skip this and focus on Projects, Education and Skills instead.",
+  internship: "Don't have experience yet? That's okay — focus on Projects, Education and Skills instead.",
+};
+
 function renderListSectionForm(key) {
   const schema = LIST_SCHEMA[key];
   const items = state.currentCV.entries[key];
+  const help = SECTION_HELP[key] ? `<p class="text-xs text-[#64748B] leading-relaxed mb-4">${SECTION_HELP[key]}</p>` : '';
 
   if (items.length === 0) {
+    const skipMsg = SECTION_SKIP_HELP[key];
     return `
+      ${help}
       <div class="text-center py-12 border border-dashed border-black/15 dark:border-white/15 rounded-xl">
-        <p class="text-sm text-[#64748B] mb-4">No ${SECTION_LABELS[key].toLowerCase()} added yet.</p>
-        <button data-add-entry="${key}" class="px-4 py-2 rounded-lg bg-violet hover:bg-violet-bright text-white text-sm font-semibold transition">+ Add ${SECTION_LABELS[key]}</button>
+        <p class="text-sm text-[#64748B] mb-1 px-4">${skipMsg || `No ${SECTION_LABELS[key].toLowerCase()} added yet.`}</p>
+        <div class="mt-4 flex items-center justify-center gap-2">
+          <button data-add-entry="${key}" class="px-4 py-2 rounded-lg bg-violet hover:bg-violet-bright text-white text-sm font-semibold transition">+ Add ${SECTION_LABELS[key]}</button>
+        </div>
       </div>
     `;
   }
@@ -636,7 +1094,7 @@ function renderListSectionForm(key) {
     </div>
   `).join('');
 
-  return cards + `<button data-add-entry="${key}" class="mt-1 w-full px-4 py-2.5 rounded-lg border border-dashed border-black/15 dark:border-white/15 hover:border-violet text-sm font-semibold text-violet-bright transition">+ Add another</button>`;
+  return help + cards + `<button data-add-entry="${key}" class="mt-1 w-full px-4 py-2.5 rounded-lg border border-dashed border-black/15 dark:border-white/15 hover:border-violet text-sm font-semibold text-violet-bright transition">+ Add another</button>`;
 }
 
 function renderEntryField(sectionKey, entry, field) {
@@ -681,9 +1139,69 @@ function bindSectionFormEvents(key) {
       state.currentCV.personal[input.dataset.personal] = input.value;
       validatePersonalField(input.dataset.personal, input.value);
       renderCVPreview();
+      renderReadinessPanel();
       scheduleAutosave();
     });
   });
+
+  // Personal show/hide + boolean checkboxes (photo, NRC, DOB, gender)
+  area.querySelectorAll('[data-personal-check]').forEach((input) => {
+    input.addEventListener('change', () => {
+      state.currentCV.personal[input.dataset.personalCheck] = input.checked;
+      renderCVPreview();
+      scheduleAutosave();
+    });
+  });
+
+  // NRC — four separate inputs combined into one stored string
+  const nrcInputs = area.querySelectorAll('[data-nrc-part]');
+  if (nrcInputs.length) {
+    const syncNrc = () => {
+      const parts = {};
+      nrcInputs.forEach((i) => { parts[i.dataset.nrcPart] = i.value.trim(); });
+      return combineNrc(parts);
+    };
+    nrcInputs.forEach((input) => {
+      input.addEventListener('input', () => {
+        state.currentCV.personal.nrc = syncNrc();
+        renderCVPreview();
+        scheduleAutosave();
+      });
+      // Validate only once the person has finished typing a part, so the
+      // error doesn't flash while they're still filling in the other three.
+      input.addEventListener('blur', () => validatePersonalField('nrc', syncNrc()));
+    });
+  }
+
+  // Photo shape selector
+  area.querySelectorAll('[data-photo-shape]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.currentCV.personal.photoShape = btn.dataset.photoShape;
+      renderSectionForm();
+      renderCVPreview();
+      scheduleAutosave();
+    });
+  });
+
+  // Photo upload
+  const photoInput = area.querySelector('#photo-input');
+  if (photoInput) {
+    photoInput.addEventListener('change', () => {
+      const file = photoInput.files && photoInput.files[0];
+      if (!file) return;
+      handlePhotoUpload(file);
+    });
+  }
+  const removePhotoBtn = area.querySelector('#btn-remove-photo');
+  if (removePhotoBtn) {
+    removePhotoBtn.addEventListener('click', () => {
+      state.currentCV.personal.photo = '';
+      renderSectionForm();
+      renderCVPreview();
+      renderReadinessPanel();
+      scheduleAutosave();
+    });
+  }
 
   // Template buttons
   area.querySelectorAll('[data-template]').forEach((btn) => {
@@ -802,6 +1320,9 @@ function validatePersonalField(name, value) {
     else if (!isValidEmail(value)) msg = 'Enter a valid email address.';
   }
   if (['website', 'linkedin', 'github'].includes(name) && value && !isValidUrl(value)) msg = 'Enter a valid URL.';
+  if (name === 'nrc' && value && !/^\d{1,2}\/[A-Za-z\u1000-\u109F]+\([A-Za-z]\)\d{6}$/.test(value.replace(/\s/g, ''))) {
+    msg = 'Format: 12/AhMaYa(N)123456';
+  }
   errEl.textContent = msg;
   errEl.classList.toggle('hidden', !msg);
   return !msg;
@@ -848,11 +1369,22 @@ function renderCVPreview() {
   const p = cv.personal;
   const contactBits = [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean);
 
+  const extraBits = [];
+  if (p.showNrc && p.nrc) extraBits.push('NRC: ' + p.nrc);
+  if (p.showDateOfBirth && p.dateOfBirth) extraBits.push('DOB: ' + formatDate(p.dateOfBirth));
+  if (p.showGender && p.gender) extraBits.push(p.gender);
+
+  const showPhotoNow = p.showPhoto && p.photo;
+
   let html = `
-    <header class="cv-header">
-      <h1 class="cv-name">${escapeHtml(p.fullName) || 'Your Name'}</h1>
-      ${p.jobTitle ? `<p class="cv-title">${escapeHtml(p.jobTitle)}</p>` : ''}
-      ${contactBits.length ? `<p class="cv-contact">${contactBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
+    <header class="cv-header ${showPhotoNow ? 'has-photo' : ''}">
+      ${showPhotoNow ? `<div class="cv-photo cv-photo-${p.photoShape || 'circle'}"><img src="${p.photo}" alt=""></div>` : ''}
+      <div class="cv-header-text">
+        <h1 class="cv-name">${escapeHtml(p.fullName) || 'Your Name'}</h1>
+        ${p.jobTitle ? `<p class="cv-title">${escapeHtml(p.jobTitle)}</p>` : ''}
+        ${contactBits.length ? `<p class="cv-contact">${contactBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
+        ${extraBits.length ? `<p class="cv-contact">${extraBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
+      </div>
     </header>
   `;
 
@@ -900,6 +1432,98 @@ function renderCVPreview() {
   });
 
   paper.innerHTML = html;
+  renderReadinessPanel();
+}
+
+/* ---------------------------------------------------------
+   15b. PROFILE PHOTO UPLOAD
+   --------------------------------------------------------- */
+
+const PHOTO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const PHOTO_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function handlePhotoUpload(file) {
+  if (!PHOTO_ALLOWED_TYPES.includes(file.type)) {
+    showToast('Please upload a JPG, PNG, or WEBP image under 2 MB.', 'error');
+    return;
+  }
+  if (file.size > PHOTO_MAX_BYTES) {
+    showToast('Please upload a JPG, PNG, or WEBP image under 2 MB.', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.currentCV.personal.photo = reader.result;
+    state.currentCV.personal.showPhoto = true;
+    renderSectionForm();
+    renderCVPreview();
+    renderReadinessPanel();
+    scheduleAutosave();
+  };
+  reader.onerror = () => showToast('Could not read that image. Please try another file.', 'error');
+  reader.readAsDataURL(file);
+}
+
+/* ---------------------------------------------------------
+   15c. CV READINESS
+   --------------------------------------------------------- */
+
+function calculateReadiness(cv) {
+  const p = cv.personal;
+  const hasAny = (key) => (cv.entries[key] || []).length > 0;
+  const sectionOn = (key) => cv.sectionEnabled[key];
+
+  const checklist = [
+    { label: 'Contact information', level: 'required', met: Boolean(p.fullName && p.email), weight: 3, show: true },
+    { label: 'Professional summary', level: 'recommended', met: Boolean(cv.summary && cv.summary.trim()), weight: 2, show: sectionOn('summary') },
+    { label: 'Education', level: 'recommended', met: hasAny('education'), weight: 2, show: sectionOn('education') },
+    { label: 'Skills', level: 'recommended', met: cv.skills.technical.length > 0 || cv.skills.soft.length > 0, weight: 2, show: sectionOn('skills') },
+    { label: 'Work experience', level: 'recommended', met: hasAny('experience') || hasAny('internship'), weight: 2, show: sectionOn('experience') || sectionOn('internship') },
+    { label: 'Projects', level: 'optional', met: hasAny('projects'), weight: 1, show: sectionOn('projects') },
+    { label: 'Certifications', level: 'optional', met: hasAny('certifications'), weight: 1, show: sectionOn('certifications') },
+  ].filter((item) => item.show);
+
+  const totalWeight = checklist.reduce((sum, i) => sum + i.weight, 0) || 1;
+  const metWeight = checklist.reduce((sum, i) => sum + (i.met ? i.weight : 0), 0);
+  const percent = Math.round((metWeight / totalWeight) * 100);
+  return { percent, checklist };
+}
+
+function renderReadinessPanel() {
+  const panel = document.getElementById('readiness-panel');
+  if (!panel || !state.currentCV) return;
+  const { percent, checklist } = calculateReadiness(state.currentCV);
+  const expanded = panel.dataset.expanded === 'true';
+
+  const barColor = percent >= 80 ? 'bg-emerald-500' : percent >= 45 ? 'bg-amber-500' : 'bg-red-500';
+
+  panel.innerHTML = `
+    <div class="rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] px-4 py-3">
+      <button id="readiness-toggle" class="w-full flex items-center gap-3">
+        <span class="text-xs font-semibold text-[#64748B] shrink-0">CV Readiness</span>
+        <span class="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
+          <span class="block h-full ${barColor} transition-all" style="width:${percent}%"></span>
+        </span>
+        <span class="text-xs font-mono font-semibold shrink-0">${percent}%</span>
+        <span class="text-[#64748B] text-xs shrink-0">${expanded ? '▾' : '▸'}</span>
+      </button>
+      ${expanded ? `
+        <ul class="mt-3 space-y-1.5">
+          ${checklist.map((item) => `
+            <li class="flex items-center gap-2 text-xs">
+              <span class="${item.met ? 'text-emerald-500' : item.level === 'required' ? 'text-red-500' : 'text-amber-500'}">${item.met ? '✓' : item.level === 'required' ? '⚠' : '○'}</span>
+              <span class="${item.met ? 'text-[#475569] dark:text-[#94A3B8]' : ''}">${item.met ? item.label : 'Add ' + item.label.toLowerCase()}</span>
+            </li>
+          `).join('')}
+        </ul>
+      ` : ''}
+    </div>
+  `;
+
+  document.getElementById('readiness-toggle').addEventListener('click', () => {
+    panel.dataset.expanded = expanded ? 'false' : 'true';
+    renderReadinessPanel();
+  });
 }
 
 /* ---------------------------------------------------------
@@ -970,6 +1594,20 @@ function bindGlobalEvents() {
   });
 
   document.getElementById('btn-print').addEventListener('click', () => window.print());
+
+  document.getElementById('btn-start-scratch').addEventListener('click', () => createNewCV(false));
+  document.getElementById('btn-start-sample').addEventListener('click', () => createNewCV(true));
+
+  const deleteAllBtn = document.getElementById('btn-delete-all');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', () => {
+      openConfirm('Delete all CV data?', 'Every CV saved in this browser will be permanently deleted. This cannot be undone.', () => {
+        getAllCVs().forEach((cv) => deleteCV(cv.id));
+        showToast('All CV data deleted', 'success');
+        renderSavedList();
+      });
+    });
+  }
 
   document.querySelectorAll('.mobile-tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => setMobileTab(btn.dataset.mobileTab));

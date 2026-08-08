@@ -192,8 +192,43 @@
   <div class="max-w-5xl mx-auto px-5 py-14 md:py-20">
     <p class="font-mono text-xs tracking-widest uppercase text-violet-bright mb-3">Step 1 of 3</p>
     <h1 class="font-display font-semibold text-3xl md:text-4xl mb-3">What's this CV for?</h1>
-    <p class="text-[#64748B] mb-10 max-w-lg">NeonCV will recommend the right sections — you can still add or remove anything later.</p>
+    <p class="text-[#64748B] mb-10 max-w-lg">NeonCV will recommend the right sections and fields — you can still add or remove anything later.</p>
     <div id="purpose-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </div>
+</section>
+
+<!-- ============ VIEW: APPLICATION CONTEXT ============ -->
+<section id="view-context" class="view hidden">
+  <div class="max-w-5xl mx-auto px-5 py-14 md:py-20">
+    <button data-nav="purpose" class="text-sm text-[#64748B] hover:text-violet-bright mb-6 inline-flex items-center gap-1">← Back to purpose</button>
+    <p class="font-mono text-xs tracking-widest uppercase text-violet-bright mb-3">Step 2 of 3</p>
+    <h1 class="font-display font-semibold text-3xl md:text-4xl mb-3">Where will you use this CV?</h1>
+    <p class="text-[#64748B] mb-10 max-w-lg">This helps NeonCV recommend the right personal details — nothing here is locked in.</p>
+    <div id="context-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </div>
+</section>
+
+<!-- ============ VIEW: START METHOD ============ -->
+<section id="view-start" class="view hidden">
+  <div class="max-w-4xl mx-auto px-5 py-14 md:py-20">
+    <button data-nav="context" class="text-sm text-[#64748B] hover:text-violet-bright mb-6 inline-flex items-center gap-1">← Back</button>
+    <p class="font-mono text-xs tracking-widest uppercase text-violet-bright mb-3">Step 3 of 3</p>
+    <h1 class="font-display font-semibold text-3xl md:text-4xl mb-3">How would you like to create your CV?</h1>
+    <p class="text-[#64748B] mb-10 max-w-lg">Either way, you'll be able to edit everything afterward.</p>
+    <div class="grid sm:grid-cols-2 gap-5">
+      <button id="btn-start-scratch" class="text-left p-6 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] hover:border-violet transition">
+        <div class="w-10 h-10 rounded-lg bg-violet/10 flex items-center justify-center text-lg text-violet-bright mb-4">✎</div>
+        <h3 class="font-display font-semibold text-lg mb-2">Start from Scratch</h3>
+        <p class="text-sm text-[#64748B] leading-relaxed mb-4">Build your CV section by section with a blank form.</p>
+        <p class="text-xs font-mono text-[#64748B] uppercase tracking-wide">Recommended if you already know what to include</p>
+      </button>
+      <button id="btn-start-sample" class="text-left p-6 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] hover:border-violet transition">
+        <div class="w-10 h-10 rounded-lg bg-violet/10 flex items-center justify-center text-lg text-violet-bright mb-4">◐</div>
+        <h3 class="font-display font-semibold text-lg mb-2">Use a Sample CV</h3>
+        <p class="text-sm text-[#64748B] leading-relaxed mb-4">Start from realistic example content and replace it with your own.</p>
+        <p class="text-xs font-mono text-[#64748B] uppercase tracking-wide">Recommended for first-time CV writers</p>
+      </button>
+    </div>
   </div>
 </section>
 
@@ -240,7 +275,8 @@
       </div>
 
       <!-- RIGHT: live preview -->
-      <div id="editor-pane-preview" class="editor-pane w-full md:w-[54%] lg:w-[58%] overflow-y-auto bg-[#EEF1F6] dark:bg-[#08090D] md:h-full py-8 px-4 md:px-8">
+      <div id="editor-pane-preview" class="editor-pane w-full md:w-[54%] lg:w-[58%] overflow-y-auto bg-[#EEF1F6] dark:bg-[#08090D] md:h-full py-6 px-4 md:px-8">
+        <div id="readiness-panel" class="no-print max-w-[210mm] mx-auto mb-5"></div>
         <div id="cv-paper-wrap" class="mx-auto">
           <div id="cv-paper" class="cv-paper template-modern"></div>
         </div>
@@ -266,6 +302,11 @@
       <p class="text-[#64748B] mb-6">Create your first CV to see it here.</p>
       <button data-nav="purpose" class="px-6 py-3 rounded-lg bg-violet hover:bg-violet-bright text-white font-semibold transition">Create Your CV</button>
     </div>
+
+    <div id="saved-footer-actions" class="mt-14 pt-8 border-t border-black/5 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <p class="text-xs text-[#64748B] max-w-md leading-relaxed">Your CV data is stored locally in this browser. NeonCV does not send your information to a server.</p>
+      <button id="btn-delete-all" class="shrink-0 px-4 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition">Delete All CV Data</button>
+    </div>
   </div>
 </section>
 
@@ -274,7 +315,7 @@
 <!-- ============ FOOTER ============ -->
 <footer id="app-footer" class="no-print border-t border-black/5 dark:border-white/[0.06] mt-8">
   <div class="max-w-6xl mx-auto px-5 py-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[#64748B]">
-    <p class="font-display font-semibold text-[#0F172A] dark:text-white">NeonCV <span class="font-body font-normal text-[#64748B]">· Built by Nyan Linnhtet</span></p>
+    <p class="font-display font-semibold text-[#0F172A] dark:text-white">NeonCV <span class="font-body font-normal text-[#64748B]">· Neon.dev</span></p>
     <p class="font-mono text-xs">© 2026 Neon.dev</p>
   </div>
 </footer>
