@@ -8,8 +8,9 @@
 
    Storage: Upstash Redis REST API. Set these environment variables
    in Vercel → Settings → Environment Variables:
-     UPSTASH_REDIS_REST_URL
-     UPSTASH_REDIS_REST_TOKEN
+     UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
+     -- or, if connected via Vercel Marketplace with a custom prefix --
+     <PREFIX>_KV_REST_API_URL / <PREFIX>_KV_REST_API_TOKEN
      ADMIN_SECRET   (any long random string you choose)
 
    If Upstash isn't configured, POST requests silently no-op (the
@@ -37,8 +38,10 @@
 const COUNTER_EVENTS = ['cv_created', 'pdf_download', 'feedback_submitted'];
 
 async function redisCmd(parts) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // See api/feedback.js for why several variable-name variants are
+  // checked — it depends on how the Upstash integration was connected.
+  const url = process.env.UPSTASH_REDIS_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
   try {
     const res = await fetch(`${url}/${parts.map(encodeURIComponent).join('/')}`, {

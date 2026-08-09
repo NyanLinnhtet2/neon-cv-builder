@@ -10,9 +10,12 @@
      TELEGRAM_CHAT_ID
 
    Optional (enables basic per-IP rate limiting; safely no-ops if
-   not set — see api/analytics.js for the same storage):
-     UPSTASH_REDIS_REST_URL
-     UPSTASH_REDIS_REST_TOKEN
+   not set — see api/analytics.js for the same storage). Works with
+   either a standalone Upstash account's variable names, or the
+   names Vercel's Upstash Marketplace integration generates for you:
+     UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
+     -- or, if connected via Vercel Marketplace with a custom prefix --
+     <PREFIX>_KV_REST_API_URL / <PREFIX>_KV_REST_API_TOKEN
 
    This function NEVER receives or forwards CV content, photos,
    NRC, or any personal data other than what the person optionally
@@ -24,8 +27,14 @@ const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_MAX_REQUESTS = 3;
 
 async function redisCmd(parts) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Vercel's Upstash Marketplace integration names variables using
+  // whatever "Custom Prefix" you chose at connect time (commonly
+  // <PREFIX>_KV_REST_API_URL / <PREFIX>_KV_REST_API_TOKEN), while a
+  // standalone Upstash account uses plain UPSTASH_REDIS_REST_URL /
+  // UPSTASH_REDIS_REST_TOKEN. Check the common variants so this works
+  // either way without needing to rename anything in Vercel.
+  const url = process.env.UPSTASH_REDIS_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null; // rate limiting disabled if not configured
   try {
     const res = await fetch(`${url}/${parts.map(encodeURIComponent).join('/')}`, {

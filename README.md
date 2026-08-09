@@ -111,7 +111,7 @@ NeonCV/
 4. Vercel will auto-detect this as a static project with serverless functions in `/api` — you don't need to change the Framework Preset, Build Command, or Output Directory. Leave them as detected/default.
 5. Before clicking **Deploy**, open the **Environment Variables** section on that same screen (or add them afterward under **Project → Settings → Environment Variables**) and add the variables listed in `.env.example`:
    - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` — required for the feedback form (see next section).
-   - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `ADMIN_SECRET` — optional, only needed for analytics (see the section after that).
+   - `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` (or the `*_KV_REST_API_URL`/`*_KV_REST_API_TOKEN` names Vercel's Marketplace integration may generate instead), plus `ADMIN_SECRET` — optional, only needed for analytics (see the section after that).
 6. Click **Deploy**. After a minute or two, Vercel gives you a live URL like `https://neon-cv-builder.vercel.app`.
 7. Any time you change an environment variable, click **Redeploy** on the latest deployment (env vars only take effect on new deployments, not automatically).
 8. From then on, every `git push` to your repo's default branch triggers a new deployment automatically.
@@ -144,11 +144,17 @@ The bot token and chat ID are only ever read inside `api/feedback.js`, which run
 Analytics (visitor counts, PDF downloads, feedback totals, and the `/?admin=1` dashboard) need somewhere to store counters centrally — `localStorage` can't do this, since it's private to each visitor's own browser. NeonCV uses [Upstash Redis](https://upstash.com), which has a free tier and needs no npm package (the serverless functions just call its REST API directly).
 
 1. Go to **[vercel.com/dashboard](https://vercel.com/dashboard) → your project → Storage** tab, then **Create Database → Upstash → Redis** (this uses Vercel's built-in marketplace integration and automatically fills in the environment variables for you). Alternatively, sign up directly at [upstash.com](https://upstash.com), create a free Redis database, and copy its **REST URL** and **REST Token** from the database's dashboard into Vercel yourself.
-2. Make sure these end up set in **Vercel → Project → Settings → Environment Variables**:
+2. Check **Vercel → Project → Settings → Environment Variables** to see exactly which names got created — this varies depending on how you connected:
    ```text
+   # A standalone Upstash account, or no custom prefix:
    UPSTASH_REDIS_REST_URL=https://....upstash.io
    UPSTASH_REDIS_REST_TOKEN=....
+
+   # Vercel's Marketplace integration with a custom prefix (e.g. "UPSTASH_REDIS"):
+   UPSTASH_REDIS_KV_REST_API_URL=https://....upstash.io
+   UPSTASH_REDIS_KV_REST_API_TOKEN=....
    ```
+   The serverless functions check for both naming conventions automatically, so whichever one Vercel generated for you will just work — no renaming needed.
 3. Add one more variable yourself — this is the password for your analytics dashboard, so make it long and random:
    ```text
    ADMIN_SECRET=choose-a-long-random-string-here
