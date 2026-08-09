@@ -1,0 +1,9 @@
+{
+  "name": "neoncv",
+  "private": true,
+  "version": "1.0.0",
+  "description": "NeonCV — a client-side CV builder by Neon.dev, with minimal Vercel serverless functions for Telegram feedback delivery and anonymous analytics.",
+  "engines": {
+    "node": ">=18"
+  }
+}

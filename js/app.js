@@ -621,6 +621,7 @@ function createNewCV(useSample) {
   saveCV(state.currentCV);
   enterEditor();
   if (useSample) showToast('Sample CV loaded — edit anything you like', 'success');
+  trackEvent('cv_created', { purpose, context, method: useSample ? 'sample' : 'scratch' });
 }
 
 /* ---------------------------------------------------------
@@ -1570,6 +1571,380 @@ function initTheme() {
    18. GLOBAL EVENT BINDING
    --------------------------------------------------------- */
 
+/* ---------------------------------------------------------
+   18b. ANALYTICS (anonymous, best-effort — never blocks the UI)
+   --------------------------------------------------------- */
+
+function getVisitorId() {
+  try {
+    let id = localStorage.getItem('neoncv_visitor_id');
+    if (!id) {
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      localStorage.setItem('neoncv_visitor_id', id);
+    }
+    return id;
+  } catch (err) {
+    return 'anonymous';
+  }
+}
+
+// Fire-and-forget. If /api/analytics isn't deployed (e.g. opening
+// index.html directly from disk, or a static-only host), this simply
+// fails silently and never affects the rest of the app.
+function trackEvent(event, meta) {
+  try {
+    fetch('/api/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, meta: meta || {}, visitorId: getVisitorId() }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (err) {
+    // no-op — analytics must never break the app
+  }
+}
+
+/* ---------------------------------------------------------
+   18c. DOWNLOAD PDF (real file, generated client-side — no print
+   dialog, no screenshot. Uses jsPDF's text/line drawing API so the
+   output stays real, selectable text rather than a rasterized image.)
+   --------------------------------------------------------- */
+
+function sanitizeFilename(str) {
+  return String(str || '')
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 60);
+}
+
+const PDF_TEMPLATE_STYLES = {
+  modern: { font: 'helvetica', heading: [124, 58, 237], name: [15, 23, 42], align: 'left', headingStyle: 'rule' },
+  classic: { font: 'times', heading: [17, 24, 39], name: [17, 24, 39], align: 'center', headingStyle: 'rule' },
+  academic: { font: 'helvetica', heading: [11, 18, 32], name: [11, 18, 32], align: 'left', headingStyle: 'fill' },
+};
+
+const PDF_PAGE = { w: 210, h: 297, marginX: 18, marginTop: 18, marginBottom: 18 };
+
+/**
+ * Normalizes any uploaded photo (JPEG/PNG/WEBP) to a PNG data URL via
+ * an offscreen canvas, since jsPDF's addImage doesn't support WEBP.
+ */
+function normalizePhotoForPdf(dataUrl) {
+  return new Promise((resolve) => {
+    if (!dataUrl) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+async function generateCvPdf(cv) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const style = PDF_TEMPLATE_STYLES[cv.template] || PDF_TEMPLATE_STYLES.modern;
+  const { w: pageW, h: pageH, marginX, marginTop, marginBottom } = PDF_PAGE;
+  const contentW = pageW - marginX * 2;
+  const centered = style.align === 'center';
+  const textX = centered ? pageW / 2 : marginX;
+  const textAlign = centered ? 'center' : 'left';
+  let y = marginTop;
+
+  const ensureSpace = (needed) => {
+    if (y + needed > pageH - marginBottom) { doc.addPage(); y = marginTop; }
+  };
+  const setFont = (weight, size, color) => {
+    doc.setFont(style.font, weight);
+    doc.setFontSize(size);
+    doc.setTextColor(color[0], color[1], color[2]);
+  };
+  const paragraph = (text, size, weight, color, lineHeight) => {
+    setFont(weight, size, color);
+    doc.splitTextToSize(text, contentW).forEach((line) => {
+      ensureSpace(lineHeight);
+      doc.text(line, textX, y, { align: textAlign });
+      y += lineHeight;
+    });
+  };
+  const heading = (label) => {
+    ensureSpace(10);
+    if (style.headingStyle === 'fill') {
+      doc.setFillColor(241, 245, 249);
+      doc.rect(marginX, y - 4.5, contentW, 7, 'F');
+      setFont('bold', 10.5, style.heading);
+      doc.text(label.toUpperCase(), marginX + 2, y);
+    } else {
+      setFont('bold', 10.5, style.heading);
+      doc.text(label.toUpperCase(), textX, y, { align: textAlign });
+      doc.setDrawColor(style.heading[0], style.heading[1], style.heading[2]);
+      doc.setLineWidth(0.4);
+      doc.line(marginX, y + 2, pageW - marginX, y + 2);
+    }
+    y += 8;
+  };
+
+  const p = cv.personal;
+
+  // Photo (drawn to the left of the name for left-aligned templates,
+  // centered above the name for the centered Classic template).
+  let photoDataUrl = null;
+  if (p.showPhoto && p.photo) {
+    try { photoDataUrl = await normalizePhotoForPdf(p.photo); } catch (err) { photoDataUrl = null; }
+  }
+  const photoSize = 24;
+  let nameStartX = textX;
+  if (photoDataUrl && !centered) {
+    try {
+      doc.addImage(photoDataUrl, 'PNG', marginX, y, photoSize, photoSize);
+      nameStartX = marginX + photoSize + 8;
+    } catch (err) { /* skip photo, continue with text */ }
+  } else if (photoDataUrl && centered) {
+    try {
+      doc.addImage(photoDataUrl, 'PNG', (pageW - photoSize) / 2, y, photoSize, photoSize);
+      y += photoSize + 6;
+    } catch (err) { /* skip photo */ }
+  }
+
+  const headerTextAlign = (photoDataUrl && !centered) ? 'left' : textAlign;
+  const headerX = (photoDataUrl && !centered) ? nameStartX : textX;
+  const headerTopY = y;
+
+  setFont('bold', 19, style.name);
+  doc.text(p.fullName || 'Your Name', headerX, y, { align: headerTextAlign }); y += 7;
+  if (p.jobTitle) { setFont('normal', 11, style.heading); doc.text(p.jobTitle, headerX, y, { align: headerTextAlign }); y += 6; }
+  const contactBits = [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean).join('   ·   ');
+  if (contactBits) {
+    setFont('normal', 9, [100, 116, 139]);
+    doc.splitTextToSize(contactBits, contentW - (headerX - marginX)).forEach((line) => {
+      doc.text(line, headerX, y, { align: headerTextAlign }); y += 5;
+    });
+  }
+  const extraBits = [];
+  if (p.showNrc && p.nrc) extraBits.push('NRC: ' + p.nrc);
+  if (p.showDateOfBirth && p.dateOfBirth) extraBits.push('DOB: ' + formatDate(p.dateOfBirth));
+  if (p.showGender && p.gender) extraBits.push(p.gender);
+  if (extraBits.length) {
+    setFont('normal', 9, [100, 116, 139]);
+    doc.text(extraBits.join('   ·   '), headerX, y, { align: headerTextAlign }); y += 5;
+  }
+
+  if (photoDataUrl && !centered) y = Math.max(y, headerTopY + photoSize);
+
+  y += 4;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.line(marginX, y, pageW - marginX, y);
+  y += 8;
+
+  const enabledOrdered = cv.sectionOrder.filter((key) => cv.sectionEnabled[key] && key !== 'personal');
+
+  enabledOrdered.forEach((key) => {
+    if (key === 'summary') {
+      if (!cv.summary.trim()) return;
+      heading('Summary');
+      paragraph(cv.summary, 10, 'normal', [51, 65, 85], 5);
+      y += 4;
+      return;
+    }
+    if (key === 'skills') {
+      if (!cv.skills.technical.length && !cv.skills.soft.length) return;
+      heading('Skills');
+      if (cv.skills.technical.length) paragraph('Core Skills: ' + cv.skills.technical.join(', '), 10, 'normal', [51, 65, 85], 5);
+      if (cv.skills.soft.length) paragraph('Soft Skills: ' + cv.skills.soft.join(', '), 10, 'normal', [51, 65, 85], 5);
+      y += 4;
+      return;
+    }
+    if (LIST_SCHEMA[key]) {
+      const items = cv.entries[key];
+      if (!items || !items.length) return;
+      const schema = LIST_SCHEMA[key];
+      heading(SECTION_LABELS[key]);
+      items.forEach((entry) => {
+        ensureSpace(10);
+        const title = schema.title(entry);
+        const subtitle = schema.subtitle(entry) || '';
+        const meta = schema.meta(entry) || '';
+        setFont('bold', 10.5, [15, 23, 42]);
+        doc.text(subtitle ? `${title} — ${subtitle}` : title, marginX, y);
+        if (meta) { setFont('normal', 9, [100, 116, 139]); doc.text(meta, pageW - marginX, y, { align: 'right' }); }
+        y += 5.5;
+        const links = [entry.url, entry.credentialUrl, entry.githubUrl, entry.liveUrl].filter(Boolean).join('   ·   ');
+        if (links) paragraph(links, 8.5, 'normal', [124, 58, 237], 4.5);
+        if (entry.description) paragraph(entry.description, 9.5, 'normal', [51, 65, 85], 4.8);
+        y += 3;
+      });
+      y += 2;
+    }
+  });
+
+  return doc;
+}
+
+async function downloadCvAsPdf() {
+  const btn = document.getElementById('btn-print');
+  if (btn.disabled) return; // guard against double-click while a download is already in progress
+  const cv = state.currentCV;
+
+  if (!cv.personal.fullName.trim() || !cv.personal.email.trim()) {
+    showToast("Please add your name and email before downloading.", 'error');
+    state.activeSectionKey = 'personal';
+    renderSectionNav();
+    renderSectionForm();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add('opacity-60', 'pointer-events-none');
+  showToast('Preparing your CV…');
+
+  try {
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('PDF library failed to load');
+    const doc = await generateCvPdf(cv);
+    const name = sanitizeFilename(cv.personal.fullName);
+    const filename = (name ? `${name}_CV` : 'NeonCV') + '.pdf';
+    doc.save(filename); // triggers a real, immediate file download — no dialog
+    showToast('PDF downloaded', 'success');
+    trackEvent('pdf_download', { template: cv.template, purpose: cv.purpose, device: window.innerWidth < 768 ? 'mobile' : 'desktop' });
+  } catch (err) {
+    console.error('NeonCV: PDF generation failed', err);
+    showToast("We couldn't generate your PDF. Please check your CV information and try again.", 'error');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-60', 'pointer-events-none');
+  }
+}
+
+/* ---------------------------------------------------------
+   18d. FEEDBACK FORM
+   --------------------------------------------------------- */
+
+function bindFeedbackForm() {
+  const form = document.getElementById('feedback-form');
+  if (!form) return;
+  const statusEl = document.getElementById('feedback-status');
+  const submitBtn = document.getElementById('feedback-submit');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const message = document.getElementById('feedback-message').value.trim();
+    if (!message) {
+      statusEl.textContent = 'Please enter a message before sending.';
+      statusEl.className = 'text-sm text-red-500';
+      statusEl.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.classList.add('opacity-60', 'pointer-events-none');
+    statusEl.classList.add('hidden');
+
+    const payload = {
+      name: document.getElementById('feedback-name').value.trim(),
+      email: document.getElementById('feedback-email').value.trim(),
+      type: document.getElementById('feedback-type').value,
+      message,
+      website: document.getElementById('feedback-honeypot').value, // honeypot
+      visitorId: getVisitorId(),
+    };
+
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        statusEl.textContent = '✓ Thank you! Your feedback has been sent successfully.';
+        statusEl.className = 'text-sm text-emerald-600 dark:text-emerald-400';
+        statusEl.classList.remove('hidden');
+        form.reset();
+        trackEvent('feedback_submitted', { type: payload.type });
+      } else {
+        statusEl.textContent = "We couldn't send your feedback right now. Please try again later.";
+        statusEl.className = 'text-sm text-red-500';
+        statusEl.classList.remove('hidden');
+      }
+    } catch (err) {
+      statusEl.textContent = "We couldn't send your feedback right now. Please try again later.";
+      statusEl.className = 'text-sm text-red-500';
+      statusEl.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('opacity-60', 'pointer-events-none');
+    }
+  });
+}
+
+/* ---------------------------------------------------------
+   18e. ADMIN ANALYTICS (opt-in via ?admin=1)
+   --------------------------------------------------------- */
+
+function maybeShowAdminView() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('admin') !== '1') return false;
+  showView('admin');
+
+  const secretInput = document.getElementById('admin-secret-input');
+  const unlockBtn = document.getElementById('admin-unlock-btn');
+  const errorEl = document.getElementById('admin-error');
+  const lockedEl = document.getElementById('admin-locked');
+  const dataEl = document.getElementById('admin-data');
+
+  const unlock = async () => {
+    errorEl.classList.add('hidden');
+    const secret = secretInput.value.trim();
+    if (!secret) return;
+    try {
+      const res = await fetch('/api/analytics?secret=' + encodeURIComponent(secret));
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      renderAdminData(data);
+      lockedEl.classList.add('hidden');
+      dataEl.classList.remove('hidden');
+    } catch (err) {
+      errorEl.classList.remove('hidden');
+    }
+  };
+
+  unlockBtn.addEventListener('click', unlock);
+  secretInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') unlock(); });
+  return true;
+}
+
+function renderAdminData(data) {
+  const dataEl = document.getElementById('admin-data');
+  const card = (label, counts) => `
+    <div class="p-5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C]">
+      <p class="text-xs font-semibold text-[#64748B] uppercase tracking-wide mb-2">${label}</p>
+      <p class="font-display font-semibold text-3xl mb-3">${counts.total.toLocaleString()}</p>
+      <div class="flex gap-4 text-xs text-[#64748B]">
+        <span>Today: <strong class="text-[#0F172A] dark:text-white">${counts.today.toLocaleString()}</strong></span>
+        <span>This month: <strong class="text-[#0F172A] dark:text-white">${counts.thisMonth.toLocaleString()}</strong></span>
+      </div>
+    </div>
+  `;
+  dataEl.innerHTML =
+    card('Visitors (unique)', data.visitors) +
+    card('CVs Created', data.cvCreated) +
+    card('PDF Downloads', data.pdfDownloads) +
+    card('Feedback Submitted', data.feedback);
+}
+
 function bindGlobalEvents() {
   document.querySelectorAll('[data-nav]').forEach((btn) => {
     btn.addEventListener('click', () => showView(btn.dataset.nav));
@@ -1593,7 +1968,7 @@ function bindGlobalEvents() {
     showToast('CV saved', 'success');
   });
 
-  document.getElementById('btn-print').addEventListener('click', () => window.print());
+  document.getElementById('btn-print').addEventListener('click', downloadCvAsPdf);
 
   document.getElementById('btn-start-scratch').addEventListener('click', () => createNewCV(false));
   document.getElementById('btn-start-sample').addEventListener('click', () => createNewCV(true));
@@ -1618,6 +1993,8 @@ function bindGlobalEvents() {
     if (state.confirmAction) state.confirmAction();
     closeConfirm();
   });
+
+  bindFeedbackForm();
 }
 
 /* ---------------------------------------------------------
@@ -1628,5 +2005,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   bindGlobalEvents();
   renderLandingChips();
-  showView('landing');
+  const isAdmin = maybeShowAdminView();
+  if (!isAdmin) showView('landing');
+  trackEvent('page_view', { path: window.location.pathname });
 });

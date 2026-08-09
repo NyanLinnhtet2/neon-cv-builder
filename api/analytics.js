@@ -1,0 +1,136 @@
+/* ============================================================
+   api/analytics.js — Vercel serverless function (Node.js runtime)
+
+   Two responsibilities:
+     POST — record one tracked event, anonymously.
+     GET  — (admin only, requires ?secret=ADMIN_SECRET) return the
+            current totals for the NeonCV Analytics dashboard.
+
+   Storage: Upstash Redis REST API. Set these environment variables
+   in Vercel → Settings → Environment Variables:
+     UPSTASH_REDIS_REST_URL
+     UPSTASH_REDIS_REST_TOKEN
+     ADMIN_SECRET   (any long random string you choose)
+
+   If Upstash isn't configured, POST requests silently no-op (the
+   app keeps working fine without analytics) and GET returns all
+   zeros rather than erroring.
+
+   Visitors are counted as UNIQUE people: each browser gets a random
+   anonymous ID (stored client-side in localStorage — see
+   getVisitorId() in js/app.js), and we add that ID to a Redis SET,
+   so visiting the site 10 times only ever counts as 1 visitor. This
+   is a best-effort, cookieless approximation — the same person on a
+   second device/browser, or after clearing site data, is counted
+   again as a new visitor, since there's no login to tie them
+   together.
+
+   Every other event (cv_created, pdf_download, feedback_submitted)
+   is a plain counter and is NOT deduplicated — the same person
+   downloading their CV 3 times correctly shows as 3 downloads.
+
+   This endpoint NEVER receives CV content, names, emails, phone
+   numbers, NRC, or photos — only an event name, an anonymous visitor
+   ID, and small metadata (template, purpose, device, feedback type).
+   ============================================================ */
+
+const COUNTER_EVENTS = ['cv_created', 'pdf_download', 'feedback_submitted'];
+
+async function redisCmd(parts) {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const res = await fetch(`${url}/${parts.map(encodeURIComponent).join('/')}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    return data.result;
+  } catch (err) {
+    console.error('NeonCV analytics: redis error', err);
+    return null;
+  }
+}
+
+function todayKey() { return new Date().toISOString().slice(0, 10); }   // YYYY-MM-DD
+function monthKey() { return new Date().toISOString().slice(0, 7); }    // YYYY-MM
+
+// ---- plain, non-deduplicated counters (cv_created, pdf_download, feedback_submitted) ----
+
+async function incrementCounter(event) {
+  await Promise.all([
+    redisCmd(['INCR', `neoncv:${event}:total`]),
+    redisCmd(['INCR', `neoncv:${event}:${todayKey()}`]),
+    redisCmd(['INCR', `neoncv:${event}:${monthKey()}`]),
+  ]);
+}
+
+async function readCounter(event) {
+  const [total, today, month] = await Promise.all([
+    redisCmd(['GET', `neoncv:${event}:total`]),
+    redisCmd(['GET', `neoncv:${event}:${todayKey()}`]),
+    redisCmd(['GET', `neoncv:${event}:${monthKey()}`]),
+  ]);
+  return { total: Number(total) || 0, today: Number(today) || 0, thisMonth: Number(month) || 0 };
+}
+
+// ---- unique-visitor tracking (page_view), deduplicated by anonymous visitorId ----
+
+async function recordUniqueVisitor(visitorId) {
+  if (!visitorId) return;
+  await Promise.all([
+    redisCmd(['SADD', 'neoncv:visitors:set:total', visitorId]),
+    redisCmd(['SADD', `neoncv:visitors:set:${todayKey()}`, visitorId]),
+    redisCmd(['SADD', `neoncv:visitors:set:${monthKey()}`, visitorId]),
+  ]);
+}
+
+async function readUniqueVisitors() {
+  const [total, today, month] = await Promise.all([
+    redisCmd(['SCARD', 'neoncv:visitors:set:total']),
+    redisCmd(['SCARD', `neoncv:visitors:set:${todayKey()}`]),
+    redisCmd(['SCARD', `neoncv:visitors:set:${monthKey()}`]),
+  ]);
+  return { total: Number(total) || 0, today: Number(today) || 0, thisMonth: Number(month) || 0 };
+}
+
+module.exports = async function handler(req, res) {
+  if (req.method === 'POST') {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const event = body.event;
+
+    if (event === 'page_view') {
+      const visitorId = String(body.visitorId || '').slice(0, 80);
+      await recordUniqueVisitor(visitorId);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (!COUNTER_EVENTS.includes(event)) {
+      res.status(400).json({ ok: false, error: 'Unknown event.' });
+      return;
+    }
+    await incrementCounter(event);
+    res.status(200).json({ ok: true });
+    return;
+  }
+
+  if (req.method === 'GET') {
+    const secret = req.query ? req.query.secret : undefined;
+    if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+      res.status(401).json({ ok: false, error: 'Unauthorized.' });
+      return;
+    }
+    const [visitors, cvCreated, pdfDownloads, feedback] = await Promise.all([
+      readUniqueVisitors(),
+      readCounter('cv_created'),
+      readCounter('pdf_download'),
+      readCounter('feedback_submitted'),
+    ]);
+    res.status(200).json({ ok: true, visitors, cvCreated, pdfDownloads, feedback });
+    return;
+  }
+
+  res.status(405).json({ ok: false, error: 'Method not allowed.' });
+};
+

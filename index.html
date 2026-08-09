@@ -177,11 +177,57 @@
   <!-- CTA -->
   <div class="border-t border-black/5 dark:border-white/[0.06]">
     <div class="max-w-6xl mx-auto px-5 py-16 md:py-20 text-center">
-      <h2 class="font-display font-semibold text-2xl md:text-3xl mb-4">Ready to build yours?</h2>
-      <p class="text-[#64748B] mb-7">It takes a few minutes. Your data stays on your device.</p>
+      <h2 class="font-display font-semibold text-2xl md:text-3xl mb-4">Ready to create your CV?</h2>
+      <p class="text-[#64748B] mb-7">Create a professional CV you can actually use. It takes a few minutes, and your data stays on your device.</p>
       <button data-nav="purpose" class="px-7 py-3.5 rounded-lg bg-violet hover:bg-violet-bright text-white font-semibold shadow-[0_0_28px_rgba(124,58,237,0.4)] transition">
-        Create Your CV
+        Create My CV
       </button>
+    </div>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div class="border-t border-black/5 dark:border-white/[0.06]">
+    <div class="max-w-xl mx-auto px-5 py-16 md:py-20">
+      <p class="font-mono text-xs tracking-widest uppercase text-[#64748B] mb-3 text-center">Feedback</p>
+      <h2 class="font-display font-semibold text-2xl md:text-3xl mb-3 text-center">Help Us Improve NeonCV</h2>
+      <p class="text-[#64748B] text-center mb-8">Was NeonCV easy to use? Tell us what worked well or what could be better.</p>
+
+      <form id="feedback-form" class="space-y-4">
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Name (optional)</label>
+            <input id="feedback-name" type="text" class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] text-sm focus:outline-none focus:border-violet transition">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Email (optional)</label>
+            <input id="feedback-email" type="email" class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] text-sm focus:outline-none focus:border-violet transition">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Feedback Type</label>
+          <select id="feedback-type" class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] text-sm focus:outline-none focus:border-violet transition">
+            <option>General Feedback</option>
+            <option>Bug Report</option>
+            <option>Feature Request</option>
+            <option>CV / PDF Issue</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Message *</label>
+          <textarea id="feedback-message" rows="4" maxlength="2000" required placeholder="What was difficult? What would you improve? Did the CV/PDF look correct?"
+            class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C] text-sm focus:outline-none focus:border-violet transition resize-none"></textarea>
+        </div>
+        <!-- Honeypot — hidden from real users, bots tend to fill every field -->
+        <div class="absolute -left-[9999px] opacity-0" aria-hidden="true">
+          <label>Website</label>
+          <input id="feedback-honeypot" type="text" tabindex="-1" autocomplete="off">
+        </div>
+        <p id="feedback-status" class="text-sm hidden"></p>
+        <button type="submit" id="feedback-submit" class="w-full sm:w-auto px-6 py-3 rounded-lg bg-violet hover:bg-violet-bright text-white font-semibold shadow-[0_0_20px_rgba(124,58,237,0.35)] transition">
+          Send Feedback
+        </button>
+      </form>
     </div>
   </div>
 
@@ -248,9 +294,9 @@
           <button data-mobile-tab="edit" class="mobile-tab-btn px-3 py-2 text-sm font-medium bg-violet/10 text-violet-bright">Edit</button>
           <button data-mobile-tab="preview" class="mobile-tab-btn px-3 py-2 text-sm font-medium">Preview</button>
         </div>
-        <button id="btn-print" aria-label="Print or save as PDF" class="w-9 h-9 sm:w-auto sm:px-3.5 sm:py-2 rounded-lg border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-sm font-semibold transition flex items-center justify-center">
-          <svg class="w-[18px] h-[18px] sm:hidden" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75V4.5a1.5 1.5 0 0 1 1.5-1.5h7.5a1.5 1.5 0 0 1 1.5 1.5v2.25M6.75 17.25H5.25A1.5 1.5 0 0 1 3.75 15.75v-5.25a1.5 1.5 0 0 1 1.5-1.5h13.5a1.5 1.5 0 0 1 1.5 1.5v5.25a1.5 1.5 0 0 1-1.5 1.5h-1.5M6.75 14.25h10.5v6h-10.5v-6Z"/></svg>
-          <span class="hidden sm:inline">Print / PDF</span>
+        <button id="btn-print" aria-label="Download PDF" class="w-9 h-9 sm:w-auto sm:px-3.5 sm:py-2 rounded-lg border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-sm font-semibold transition flex items-center justify-center">
+          <svg class="w-[18px] h-[18px] sm:hidden" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v13.5m0 0-4.5-4.5M12 16.5l4.5-4.5M4.5 19.5h15"/></svg>
+          <span class="hidden sm:inline">Download PDF</span>
         </button>
         <button id="btn-save-cv" class="px-3 sm:px-3.5 py-2 rounded-lg bg-violet hover:bg-violet-bright text-white text-sm font-semibold transition">Save</button>
       </div>
@@ -304,9 +350,28 @@
     </div>
 
     <div id="saved-footer-actions" class="mt-14 pt-8 border-t border-black/5 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <p class="text-xs text-[#64748B] max-w-md leading-relaxed">Your CV data is stored locally in this browser. NeonCV does not send your information to a server.</p>
+      <p class="text-xs text-[#64748B] max-w-md leading-relaxed">Your CV content is stored locally in this browser and is never uploaded. NeonCV only sends anonymous usage counts (like page views and PDF downloads) to help us improve the product — never your CV data, name, or photo.</p>
       <button id="btn-delete-all" class="shrink-0 px-4 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition">Delete All CV Data</button>
     </div>
+  </div>
+</section>
+
+<!-- ============ VIEW: ADMIN ANALYTICS (hidden, opt-in via ?admin=1) ============ -->
+<section id="view-admin" class="view hidden">
+  <div class="max-w-2xl mx-auto px-5 py-14 md:py-20">
+    <h1 class="font-display font-semibold text-2xl md:text-3xl mb-2">NeonCV Analytics</h1>
+    <p class="text-[#64748B] mb-8 text-sm">Anonymous usage counts only. Not linked to any visitor's identity or CV content.</p>
+
+    <div id="admin-locked" class="p-6 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C]">
+      <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Admin secret</label>
+      <div class="flex gap-2">
+        <input id="admin-secret-input" type="password" class="flex-1 px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
+        <button id="admin-unlock-btn" class="px-4 py-2.5 rounded-lg bg-violet hover:bg-violet-bright text-white text-sm font-semibold transition">View</button>
+      </div>
+      <p id="admin-error" class="text-xs text-red-500 mt-2 hidden">Incorrect secret, or analytics isn't configured yet.</p>
+    </div>
+
+    <div id="admin-data" class="hidden grid sm:grid-cols-2 gap-4"></div>
   </div>
 </section>
 
@@ -335,6 +400,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/app.js"></script>
 </body>
