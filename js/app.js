@@ -381,6 +381,7 @@ let state = {
   saveTimer: null,
   pendingDeleteId: null,
   confirmAction: null,
+  photoStudio: null,
 };
 
 function blankCV(purposeKey, contextKey, useSample) {
@@ -403,7 +404,8 @@ function blankCV(purposeKey, contextKey, useSample) {
     personal: {
       fullName: '', jobTitle: '', email: '', phone: '', location: '',
       website: '', linkedin: '', github: '',
-      photo: '', showPhoto: true, photoShape: 'circle',
+      photo: '', photoOriginal: '', showPhoto: true, photoShape: 'circle',
+      photoSettings: { background: 'white', zoom: 1, positionX: 0, positionY: 0, rotation: 0, brightness: 0, contrast: 0, saturation: 0 },
       nrc: '', showNrc: false,
       dateOfBirth: '', showDateOfBirth: false,
       gender: '', showGender: false,
@@ -430,8 +432,12 @@ function normalizeCV(cv) {
   cv.personal = cv.personal || {};
   const p = cv.personal;
   if (p.photo === undefined) p.photo = '';
+  if (p.photoOriginal === undefined) p.photoOriginal = '';
   if (p.showPhoto === undefined) p.showPhoto = true;
   if (p.photoShape === undefined) p.photoShape = 'circle';
+  if (!p.photoSettings) {
+    p.photoSettings = { background: 'white', zoom: 1, positionX: 0, positionY: 0, rotation: 0, brightness: 0, contrast: 0, saturation: 0 };
+  }
   if (p.nrc === undefined) p.nrc = '';
   if (p.showNrc === undefined) p.showNrc = false;
   if (p.dateOfBirth === undefined) p.dateOfBirth = '';
@@ -923,6 +929,7 @@ function renderPersonalForm() {
               ${p.photo ? 'Change Photo' : 'Upload Photo'}
               <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
             </label>
+            ${p.photo ? `<button id="btn-edit-photo" class="px-3 py-2 rounded-lg border border-violet/40 text-violet-bright hover:bg-violet/10 text-xs font-semibold transition">✎ Edit Photo</button>` : ''}
             ${p.photo ? `<button id="btn-remove-photo" class="px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition">Remove</button>` : ''}
           </div>
           <div class="flex items-center gap-1.5 mb-2">
@@ -1190,13 +1197,22 @@ function bindSectionFormEvents(key) {
     photoInput.addEventListener('change', () => {
       const file = photoInput.files && photoInput.files[0];
       if (!file) return;
-      handlePhotoUpload(file);
+      if (state.currentCV.personal.photo) {
+        openConfirm('Replace current photo?', 'Your current photo and any edits will be replaced with the new upload.', () => handlePhotoUpload(file));
+        photoInput.value = ''; // allow re-selecting the same file later
+      } else {
+        handlePhotoUpload(file);
+      }
     });
   }
+  const editPhotoBtn = area.querySelector('#btn-edit-photo');
+  if (editPhotoBtn) editPhotoBtn.addEventListener('click', openPhotoStudio);
+
   const removePhotoBtn = area.querySelector('#btn-remove-photo');
   if (removePhotoBtn) {
     removePhotoBtn.addEventListener('click', () => {
       state.currentCV.personal.photo = '';
+      state.currentCV.personal.photoOriginal = '';
       renderSectionForm();
       renderCVPreview();
       renderReadinessPanel();
@@ -1455,11 +1471,14 @@ function handlePhotoUpload(file) {
   const reader = new FileReader();
   reader.onload = () => {
     state.currentCV.personal.photo = reader.result;
+    state.currentCV.personal.photoOriginal = reader.result;
+    state.currentCV.personal.photoSettings = { background: 'white', zoom: 1, positionX: 0, positionY: 0, rotation: 0, brightness: 0, contrast: 0, saturation: 0 };
     state.currentCV.personal.showPhoto = true;
     renderSectionForm();
     renderCVPreview();
     renderReadinessPanel();
     scheduleAutosave();
+    trackEvent('photo_upload');
   };
   reader.onerror = () => showToast('Could not read that image. Please try another file.', 'error');
   reader.readAsDataURL(file);
@@ -1650,6 +1669,55 @@ function normalizePhotoForPdf(dataUrl) {
   });
 }
 
+/**
+ * Masks a (square-ish) image into the CV's chosen photo shape by
+ * center-cropping to a square and clipping with destination-in
+ * compositing, so the PDF photo visually matches the circle/rounded
+ * shape shown in the live preview instead of always being a plain
+ * rectangle. 'square' needs no masking.
+ */
+function maskImageToShape(dataUrl, shape) {
+  return new Promise((resolve) => {
+    if (!dataUrl || shape === 'square') { resolve(dataUrl); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const size = Math.min(img.naturalWidth, img.naturalHeight);
+        const sx = (img.naturalWidth - size) / 2;
+        const sy = (img.naturalHeight - size) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.beginPath();
+        if (shape === 'circle') {
+          ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        } else {
+          const r = size * 0.14;
+          ctx.moveTo(r, 0);
+          ctx.lineTo(size - r, 0);
+          ctx.quadraticCurveTo(size, 0, size, r);
+          ctx.lineTo(size, size - r);
+          ctx.quadraticCurveTo(size, size, size - r, size);
+          ctx.lineTo(r, size);
+          ctx.quadraticCurveTo(0, size, 0, size - r);
+          ctx.lineTo(0, r);
+          ctx.quadraticCurveTo(0, 0, r, 0);
+        }
+        ctx.closePath();
+        ctx.fill();
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) {
+        resolve(dataUrl); // fall back to the unmasked photo rather than losing it entirely
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function generateCvPdf(cv) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -1700,7 +1768,10 @@ async function generateCvPdf(cv) {
   // centered above the name for the centered Classic template).
   let photoDataUrl = null;
   if (p.showPhoto && p.photo) {
-    try { photoDataUrl = await normalizePhotoForPdf(p.photo); } catch (err) { photoDataUrl = null; }
+    try {
+      const normalized = await normalizePhotoForPdf(p.photo);
+      photoDataUrl = await maskImageToShape(normalized, p.photoShape || 'circle');
+    } catch (err) { photoDataUrl = null; }
   }
   const photoSize = 24;
   let nameStartX = textX;
@@ -1888,6 +1959,269 @@ function bindFeedbackForm() {
 }
 
 /* ---------------------------------------------------------
+   18f. PHOTO STUDIO — AI background removal + local editing
+
+   Editing pipeline: personal.photoOriginal is the untouched upload.
+   Opening the studio always starts from that (plus the last-saved
+   photoSettings), so repeated edits never compound quality loss.
+   "Apply" flattens the canvas (background + filters + AI cutout if
+   used) into a single PNG stored in personal.photo — the same field
+   the rest of the app (live preview, jsPDF) already reads, so no
+   other rendering code needs to know the studio exists.
+   --------------------------------------------------------- */
+
+const PHOTO_STUDIO_CANVAS_SIZE = 320;
+const PHOTO_STUDIO_BACKGROUNDS = [
+  { key: 'white', label: 'White', color: '#FFFFFF' },
+  { key: 'lightgray', label: 'Light Gray', color: '#E5E7EB' },
+  { key: 'softblue', label: 'Soft Blue', color: '#DBEAFE' },
+  { key: 'transparent', label: 'Transparent', color: null },
+];
+const PHOTO_STUDIO_DEFAULT_SETTINGS = { background: 'white', zoom: 1, positionX: 0, positionY: 0, rotation: 0, brightness: 0, contrast: 0, saturation: 0 };
+
+function openPhotoStudio() {
+  const p = state.currentCV.personal;
+  // Older CVs saved before Photo Studio existed have `photo` but no
+  // `photoOriginal` — fall back to `photo` itself as the edit source
+  // so "Edit Photo" still works instead of silently doing nothing.
+  const source = p.photoOriginal || p.photo;
+  if (!source) return;
+  if (!p.photoOriginal) p.photoOriginal = p.photo; // capture a stable baseline for legacy CVs so future edits don't compound
+  state.photoStudio = {
+    sourceImage: source,
+    bgRemovedImage: null,
+    loadedImg: null,
+    settings: Object.assign({}, PHOTO_STUDIO_DEFAULT_SETTINGS, p.photoSettings || {}),
+  };
+  document.getElementById('photo-studio-ai-status').textContent = '';
+  renderPhotoStudioControls();
+  loadPhotoStudioImage(source);
+  checkPhotoStudioResolution(source);
+  const modal = document.getElementById('photo-studio-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closePhotoStudio() {
+  const modal = document.getElementById('photo-studio-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  state.photoStudio = null;
+}
+
+function checkPhotoStudioResolution(dataUrl) {
+  const img = new Image();
+  img.onload = () => {
+    const warn = document.getElementById('photo-studio-quality-warning');
+    if (img.naturalWidth < 400 || img.naturalHeight < 400) {
+      warn.textContent = 'Your image may look soft when printed. For better CV quality, upload a larger photo if possible.';
+      warn.classList.remove('hidden');
+    } else {
+      warn.classList.add('hidden');
+    }
+  };
+  img.src = dataUrl;
+}
+
+function loadPhotoStudioImage(src) {
+  const img = new Image();
+  img.onload = () => {
+    if (!state.photoStudio) return;
+    state.photoStudio.loadedImg = img;
+    redrawPhotoStudioCanvas();
+  };
+  img.src = src;
+}
+
+function renderPhotoStudioControls() {
+  const s = state.photoStudio.settings;
+
+  const bgEl = document.getElementById('photo-studio-bg-options');
+  bgEl.innerHTML = PHOTO_STUDIO_BACKGROUNDS.map((bg) => `
+    <button data-bg="${bg.key}" class="px-3 py-2 rounded-lg border text-xs font-medium transition ${s.background === bg.key ? 'border-violet ring-1 ring-violet text-violet-bright' : 'border-black/10 dark:border-white/10'}">${bg.label}</button>
+  `).join('');
+  bgEl.querySelectorAll('[data-bg]').forEach((btn) => btn.addEventListener('click', () => {
+    if (btn.dataset.bg === 'transparent' && !state.photoStudio.bgRemovedImage) {
+      showToast("Run \"Remove Background\" first to use a transparent background.");
+      return;
+    }
+    state.photoStudio.settings.background = btn.dataset.bg;
+    renderPhotoStudioControls();
+    redrawPhotoStudioCanvas();
+  }));
+
+  const shapeEl = document.getElementById('photo-studio-shape-options');
+  shapeEl.innerHTML = ['circle', 'rounded', 'square'].map((shape) => `
+    <button data-pshape="${shape}" aria-label="${shape} shape" class="w-9 h-9 flex items-center justify-center border text-[11px] font-semibold transition ${state.currentCV.personal.photoShape === shape ? 'border-violet text-violet-bright' : 'border-black/10 dark:border-white/10 text-[#94A3B8]'} ${shape === 'circle' ? 'rounded-full' : shape === 'rounded' ? 'rounded-md' : 'rounded-none'}">${shape[0].toUpperCase()}</button>
+  `).join('');
+  shapeEl.querySelectorAll('[data-pshape]').forEach((btn) => btn.addEventListener('click', () => {
+    state.currentCV.personal.photoShape = btn.dataset.pshape;
+    renderPhotoStudioControls();
+  }));
+
+  document.getElementById('photo-studio-zoom').value = s.zoom;
+  document.getElementById('photo-studio-brightness').value = s.brightness;
+  document.getElementById('photo-studio-contrast').value = s.contrast;
+  document.getElementById('photo-studio-saturation').value = s.saturation;
+}
+
+function redrawPhotoStudioCanvas() {
+  const st = state.photoStudio;
+  if (!st || !st.loadedImg) return;
+  const canvas = document.getElementById('photo-studio-canvas');
+  const ctx = canvas.getContext('2d');
+  const size = PHOTO_STUDIO_CANVAS_SIZE;
+  const s = st.settings;
+  const bgConf = PHOTO_STUDIO_BACKGROUNDS.find((b) => b.key === s.background) || PHOTO_STUDIO_BACKGROUNDS[0];
+
+  ctx.clearRect(0, 0, size, size);
+  if (bgConf.color) {
+    ctx.fillStyle = bgConf.color;
+    ctx.fillRect(0, 0, size, size);
+  } else {
+    // Transparent — draw a light checkerboard so it's clear there's no background, not a bug.
+    const tile = 10;
+    for (let y = 0; y < size; y += tile) {
+      for (let x = 0; x < size; x += tile) {
+        ctx.fillStyle = ((x / tile + y / tile) % 2 === 0) ? '#F1F5F9' : '#E2E8F0';
+        ctx.fillRect(x, y, tile, tile);
+      }
+    }
+  }
+
+  ctx.save();
+  ctx.filter = `brightness(${100 + s.brightness}%) contrast(${100 + s.contrast}%) saturate(${100 + s.saturation}%)`;
+  ctx.translate(size / 2 + s.positionX, size / 2 + s.positionY);
+  ctx.rotate((s.rotation * Math.PI) / 180);
+  const img = st.loadedImg;
+  const cover = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+  const drawW = img.naturalWidth * cover * s.zoom;
+  const drawH = img.naturalHeight * cover * s.zoom;
+  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  ctx.restore();
+}
+
+function rotatePhotoStudio(delta) {
+  if (!state.photoStudio) return;
+  const s = state.photoStudio.settings;
+  s.rotation = (s.rotation + delta + 360) % 360;
+  redrawPhotoStudioCanvas();
+}
+
+function resetPhotoStudio() {
+  if (!state.photoStudio) return;
+  state.photoStudio.settings = Object.assign({}, PHOTO_STUDIO_DEFAULT_SETTINGS);
+  state.photoStudio.bgRemovedImage = null;
+  document.getElementById('photo-studio-ai-status').textContent = '';
+  loadPhotoStudioImage(state.photoStudio.sourceImage);
+  renderPhotoStudioControls();
+}
+
+async function handlePhotoStudioRemoveBg() {
+  const st = state.photoStudio;
+  if (!st) return;
+  const statusEl = document.getElementById('photo-studio-ai-status');
+  const btn = document.getElementById('photo-studio-remove-bg');
+
+  statusEl.textContent = 'Removing background…';
+  statusEl.className = 'mt-2 text-xs text-center min-h-[1em] text-[#64748B]';
+  btn.disabled = true;
+  btn.classList.add('opacity-60', 'pointer-events-none');
+  trackEvent('photo_ai_process');
+
+  try {
+    const res = await fetch('/api/photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: st.sourceImage }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || "We couldn't remove the background right now.");
+
+    st.bgRemovedImage = data.image;
+    loadPhotoStudioImage(st.bgRemovedImage);
+    statusEl.textContent = 'Background removed successfully.';
+    statusEl.className = 'mt-2 text-xs text-center min-h-[1em] text-emerald-600 dark:text-emerald-400';
+    trackEvent('photo_ai_success');
+  } catch (err) {
+    statusEl.innerHTML = `${escapeHtml(err.message || "We couldn't remove the background right now.")} <button id="photo-studio-ai-retry" class="underline font-semibold">Try Again</button>`;
+    statusEl.className = 'mt-2 text-xs text-center min-h-[1em] text-red-500';
+    const retryBtn = document.getElementById('photo-studio-ai-retry');
+    if (retryBtn) retryBtn.addEventListener('click', handlePhotoStudioRemoveBg);
+    trackEvent('photo_ai_failure');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-60', 'pointer-events-none');
+  }
+}
+
+function applyPhotoStudio() {
+  const st = state.photoStudio;
+  if (!st) return;
+  const canvas = document.getElementById('photo-studio-canvas');
+  state.currentCV.personal.photo = canvas.toDataURL('image/png');
+  state.currentCV.personal.photoSettings = Object.assign({}, st.settings);
+  closePhotoStudio();
+  renderSectionForm();
+  renderCVPreview();
+  renderReadinessPanel();
+  scheduleAutosave();
+  showToast('Photo applied', 'success');
+  trackEvent('photo_applied');
+}
+
+function bindPhotoStudioDrag() {
+  const canvas = document.getElementById('photo-studio-canvas');
+  let dragging = false;
+  let startX = 0, startY = 0, startPosX = 0, startPosY = 0;
+  const scaleFactor = () => PHOTO_STUDIO_CANVAS_SIZE / canvas.clientWidth; // canvas is CSS-scaled down from its intrinsic size
+
+  const start = (x, y) => {
+    if (!state.photoStudio) return;
+    dragging = true;
+    startX = x; startY = y;
+    startPosX = state.photoStudio.settings.positionX;
+    startPosY = state.photoStudio.settings.positionY;
+  };
+  const move = (x, y) => {
+    if (!dragging || !state.photoStudio) return;
+    const f = scaleFactor();
+    state.photoStudio.settings.positionX = startPosX + (x - startX) * f;
+    state.photoStudio.settings.positionY = startPosY + (y - startY) * f;
+    redrawPhotoStudioCanvas();
+  };
+  const end = () => { dragging = false; };
+
+  canvas.addEventListener('mousedown', (e) => start(e.clientX, e.clientY));
+  window.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
+  window.addEventListener('mouseup', end);
+
+  canvas.addEventListener('touchstart', (e) => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
+  canvas.addEventListener('touchend', end);
+}
+
+function bindPhotoStudioControls() {
+  document.getElementById('photo-studio-close').addEventListener('click', closePhotoStudio);
+  document.getElementById('photo-studio-cancel').addEventListener('click', closePhotoStudio);
+  document.getElementById('photo-studio-apply').addEventListener('click', applyPhotoStudio);
+  document.getElementById('photo-studio-reset').addEventListener('click', resetPhotoStudio);
+  document.getElementById('photo-studio-remove-bg').addEventListener('click', handlePhotoStudioRemoveBg);
+  document.getElementById('photo-studio-rotate-left').addEventListener('click', () => rotatePhotoStudio(-90));
+  document.getElementById('photo-studio-rotate-right').addEventListener('click', () => rotatePhotoStudio(90));
+
+  ['zoom', 'brightness', 'contrast', 'saturation'].forEach((key) => {
+    document.getElementById('photo-studio-' + key).addEventListener('input', (e) => {
+      if (!state.photoStudio) return;
+      state.photoStudio.settings[key] = Number(e.target.value);
+      redrawPhotoStudioCanvas();
+    });
+  });
+
+  bindPhotoStudioDrag();
+}
+
+/* ---------------------------------------------------------
    18e. ADMIN ANALYTICS (opt-in via ?admin=1)
    --------------------------------------------------------- */
 
@@ -1995,6 +2329,7 @@ function bindGlobalEvents() {
   });
 
   bindFeedbackForm();
+  bindPhotoStudioControls();
 }
 
 /* ---------------------------------------------------------

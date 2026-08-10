@@ -35,7 +35,7 @@
    ID, and small metadata (template, purpose, device, feedback type).
    ============================================================ */
 
-const COUNTER_EVENTS = ['cv_created', 'pdf_download', 'feedback_submitted'];
+const COUNTER_EVENTS = ['cv_created', 'pdf_download', 'feedback_submitted', 'photo_upload', 'photo_ai_process', 'photo_ai_success', 'photo_ai_failure', 'photo_applied'];
 
 async function redisCmd(parts) {
   // See api/feedback.js for why several variable-name variants are

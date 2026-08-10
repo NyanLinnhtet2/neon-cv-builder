@@ -400,6 +400,72 @@
   </div>
 </div>
 
+<!-- ============ PHOTO STUDIO MODAL ============ -->
+<div id="photo-studio-modal" class="no-print fixed inset-0 z-[80] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+  <div class="bg-white dark:bg-[#14161F] rounded-xl shadow-2xl w-full max-w-3xl max-h-[94vh] overflow-y-auto border border-black/5 dark:border-white/10">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-black/5 dark:border-white/10">
+      <h3 class="font-display font-semibold text-lg">CV Photo Studio</h3>
+      <button id="photo-studio-close" aria-label="Close photo studio" class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-[#64748B]">✕</button>
+    </div>
+
+    <div class="flex flex-col md:flex-row">
+      <!-- Preview -->
+      <div class="md:w-1/2 p-5 flex flex-col items-center bg-[#F8FAFC] dark:bg-[#0B0D12]">
+        <canvas id="photo-studio-canvas" width="320" height="320" class="rounded-lg shadow-lg touch-none cursor-move max-w-full" style="width:280px;height:280px;" aria-label="Photo preview — drag to reposition"></canvas>
+        <p class="text-[11px] text-[#94A3B8] mt-2 text-center">Drag the photo to reposition</p>
+        <div id="photo-studio-quality-warning" class="hidden mt-2 text-xs text-amber-600 dark:text-amber-400 text-center max-w-xs"></div>
+        <div id="photo-studio-ai-status" class="mt-2 text-xs text-center min-h-[1em]"></div>
+        <button id="photo-studio-remove-bg" class="mt-2 px-4 py-2 rounded-lg bg-violet hover:bg-violet-bright text-white text-xs font-semibold transition">Remove Background (AI)</button>
+      </div>
+
+      <!-- Controls -->
+      <div class="md:w-1/2 p-5 space-y-5 border-t md:border-t-0 md:border-l border-black/5 dark:border-white/10">
+        <div>
+          <p class="text-xs font-semibold text-[#64748B] mb-2">Background</p>
+          <div class="flex flex-wrap gap-2" id="photo-studio-bg-options"></div>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-[#64748B] mb-2">Photo Shape</p>
+          <div class="flex items-center gap-2" id="photo-studio-shape-options"></div>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-[#64748B] mb-2">Rotate</p>
+          <div class="flex items-center gap-2">
+            <button id="photo-studio-rotate-left" aria-label="Rotate left" class="px-3 py-2 rounded-lg border border-black/10 dark:border-white/10 text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/5 transition">⟲ Left</button>
+            <button id="photo-studio-rotate-right" aria-label="Rotate right" class="px-3 py-2 rounded-lg border border-black/10 dark:border-white/10 text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/5 transition">⟳ Right</button>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label for="photo-studio-zoom" class="block text-xs font-semibold text-[#64748B] mb-1">Zoom</label>
+            <input id="photo-studio-zoom" type="range" min="1" max="2.5" step="0.05" class="w-full accent-violet">
+          </div>
+          <div>
+            <label for="photo-studio-brightness" class="block text-xs font-semibold text-[#64748B] mb-1">Brightness</label>
+            <input id="photo-studio-brightness" type="range" min="-50" max="50" step="1" class="w-full accent-violet">
+          </div>
+          <div>
+            <label for="photo-studio-contrast" class="block text-xs font-semibold text-[#64748B] mb-1">Contrast</label>
+            <input id="photo-studio-contrast" type="range" min="-50" max="50" step="1" class="w-full accent-violet">
+          </div>
+          <div>
+            <label for="photo-studio-saturation" class="block text-xs font-semibold text-[#64748B] mb-1">Saturation</label>
+            <input id="photo-studio-saturation" type="range" min="-50" max="50" step="1" class="w-full accent-violet">
+          </div>
+        </div>
+        <p class="text-[11px] text-[#94A3B8] leading-relaxed">For the best result: face the camera, use good lighting, keep your face clearly visible, and avoid heavily blurred or very low-resolution photos.</p>
+        <div class="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/10">
+          <button id="photo-studio-reset" class="text-xs font-semibold text-[#64748B] hover:underline">Reset Changes</button>
+          <div class="flex gap-2">
+            <button id="photo-studio-cancel" class="px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black/5 dark:hover:bg-white/5 transition">Cancel</button>
+            <button id="photo-studio-apply" class="px-4 py-2 rounded-lg bg-violet hover:bg-violet-bright text-white text-sm font-semibold transition">Apply Photo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/app.js"></script>

@@ -23,6 +23,7 @@ Create tailored, professional CVs for job applications, internships, scholarship
 - **Print-ready A4 export** — a "Download PDF" button that generates a real PDF file client-side and downloads it immediately — no print dialog, no extra step. It's built from the actual CV text using [jsPDF](https://github.com/parallax/jsPDF) (not a screenshot), so text stays sharp and selectable, and long CVs paginate cleanly across multiple A4 pages.
 - **Feedback form** — an optional "Help Us Improve NeonCV" section on the landing page that delivers messages straight to a Telegram chat via a small serverless function (see [Setting up the Telegram bot](#setting-up-the-telegram-bot) below). CV content, photos, and personal data are never included.
 - **Anonymous analytics** — optional, privacy-friendly tracking of unique visitors, CVs created, PDF downloads, and feedback submissions, viewable on a secret-protected `/?admin=1` dashboard. No CV content, names, or identities are ever tracked (see [Setting up analytics](#setting-up-analytics-optional) below).
+- **CV Photo Studio** — click "Edit Photo" after uploading to open a built-in editor: crop/reposition by dragging, zoom, rotate, adjust brightness/contrast/saturation, pick a background (white/light gray/soft blue/transparent), and optionally remove the background with AI — all before applying the result to your CV. Editing is local and instant; only the "Remove Background" step calls a server, and only your active photo is ever sent, never CV content. See [Setting up the Photo Studio](#setting-up-the-photo-studio-optional) below.
 - **Dark mode** — light and dark themes, remembered across visits.
 - **Fully responsive** — usable on desktop, tablet, and mobile, with a dedicated Edit/Preview toggle on small screens.
 - **Private by default** — the CV builder itself needs no account, no backend, and sends nothing anywhere. Everything lives in `localStorage` on your device, and you can delete all of it at any time. The optional feedback/analytics features (see below) only ever send anonymous, non-CV data if you choose to set them up.
@@ -43,9 +44,10 @@ Create tailored, professional CVs for job applications, internships, scholarship
 - Tailwind CSS (via CDN)
 - Vanilla JavaScript (no frameworks, no build step)
 - Browser `localStorage` for CV persistence
-- Two small Vercel serverless functions (`api/feedback.js`, `api/analytics.js`) — plain Node.js, zero npm dependencies, used only for the optional feedback/analytics features
+- Three small Vercel serverless functions (`api/feedback.js`, `api/analytics.js`, `api/photo.js`) — plain Node.js, zero npm dependencies, used only for the optional feedback/analytics/AI-photo features
 - [jsPDF](https://github.com/parallax/jsPDF) (via CDN) — generates the downloadable PDF directly from real text, client-side, with no build step
-- [Upstash Redis](https://upstash.com) (optional) — free-tier REST-based storage for analytics counters and feedback rate-limiting
+- [Upstash Redis](https://upstash.com) (optional) — free-tier REST-based storage for analytics counters and feedback/photo rate-limiting
+- An AI background-removal provider (optional — [remove.bg](https://www.remove.bg/api) by default) for the Photo Studio's "Remove Background" button
 
 No React, no Vue, no TypeScript, no database, no ORM, no full backend server.
 
@@ -66,7 +68,7 @@ The CV builder itself is a static site — no build step, no dependencies to ins
    ```
 3. Visit the local URL shown in your terminal (if you used a server), or just double-click `index.html`.
 
-The Feedback form and analytics dashboard need the serverless functions and environment variables described below — they simply fail silently (feedback shows an error toast; analytics counts read as zero) if you haven't set those up yet, so the rest of the app still works fine without them.
+The Feedback form, analytics dashboard, and Photo Studio's AI background removal all need the serverless functions and environment variables described below — each one simply fails gracefully (a friendly error/fallback) if you haven't set it up yet, so the rest of the app still works fine without them.
 
 To run the serverless functions locally too, use the [Vercel CLI](https://vercel.com/docs/cli):
 ```bash
@@ -90,7 +92,8 @@ NeonCV/
 │
 ├── api/
 │   ├── feedback.js           # Vercel serverless function — delivers feedback to Telegram
-│   └── analytics.js          # Vercel serverless function — anonymous usage counters
+│   ├── analytics.js          # Vercel serverless function — anonymous usage counters
+│   └── photo.js              # Vercel serverless function — AI background removal for the Photo Studio
 │
 ├── assets/
 │   └── images/
@@ -112,6 +115,7 @@ NeonCV/
 5. Before clicking **Deploy**, open the **Environment Variables** section on that same screen (or add them afterward under **Project → Settings → Environment Variables**) and add the variables listed in `.env.example`:
    - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` — required for the feedback form (see next section).
    - `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` (or the `*_KV_REST_API_URL`/`*_KV_REST_API_TOKEN` names Vercel's Marketplace integration may generate instead), plus `ADMIN_SECRET` — optional, only needed for analytics (see the section after that).
+   - `PHOTO_AI_API_KEY` and `PHOTO_AI_PROVIDER` — optional, only needed for the Photo Studio's AI background removal (see [Setting up the Photo Studio](#setting-up-the-photo-studio-optional) further down).
 6. Click **Deploy**. After a minute or two, Vercel gives you a live URL like `https://neon-cv-builder.vercel.app`.
 7. Any time you change an environment variable, click **Redeploy** on the latest deployment (env vars only take effect on new deployments, not automatically).
 8. From then on, every `git push` to your repo's default branch triggers a new deployment automatically.
@@ -170,6 +174,29 @@ If you skip this section entirely, the app still works normally — `trackEvent(
 - **CVs Created**, **PDF Downloads**, and **Feedback Submitted** are plain, non-deduplicated counters — if the same person downloads their CV 3 times, the count goes up by 3. This is deliberate: it measures actual usage, not unique users.
 
 Never tracked or sent to any server: CV content, personal information, NRC, uploaded photos, or anything you type into the CV editor.
+
+---
+
+## Setting up the Photo Studio (optional)
+
+The Photo Studio's manual editing (crop/zoom/move/rotate/brightness/contrast/saturation/background/shape) always works, with no setup and no server calls. Only the **"Remove Background (AI)"** button needs configuration — everything else in this section is purely to enable that one feature.
+
+1. Sign up for an AI background-removal provider. The code ships with [remove.bg](https://www.remove.bg/api) wired up by default:
+   - Go to [remove.bg/api](https://www.remove.bg/api) and create an account, then choose the plan that fits your expected usage.
+   - Copy your **API key** from the remove.bg dashboard.
+2. In **Vercel → Project → Settings → Environment Variables**, add:
+   ```text
+   PHOTO_AI_API_KEY=your-remove.bg-api-key
+   PHOTO_AI_PROVIDER=removebg
+   ```
+3. Redeploy.
+4. Test it: in the CV editor, upload a photo, click **Edit Photo**, then **Remove Background (AI)**.
+
+If you'd rather use a different provider (e.g. Photoroom, withoutbg), everything provider-specific is isolated in one function — `removeBackgroundViaProvider()` in `api/photo.js` — so you can add another branch there without touching anything else. Only `PHOTO_AI_PROVIDER=removebg` is implemented out of the box.
+
+If `PHOTO_AI_API_KEY` isn't set, the "Remove Background" button shows a friendly error and a **Try Again** link — the rest of the Photo Studio, and CV creation in general, is completely unaffected. AI is an enhancement here, never a requirement.
+
+**Privacy:** only the one photo actively being edited is ever sent to `/api/photo` (and from there to the AI provider) — never CV content, never other saved CVs' photos, and nothing is logged or stored server-side. The AI only removes the background; it never generates a new face, changes your appearance, or applies beauty filters.
 
 ---
 
