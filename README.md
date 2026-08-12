@@ -23,7 +23,7 @@ Create tailored, professional CVs for job applications, internships, scholarship
 - **Print-ready A4 export** — a "Download PDF" button that generates a real PDF file client-side and downloads it immediately — no print dialog, no extra step. It's built from the actual CV text using [jsPDF](https://github.com/parallax/jsPDF) (not a screenshot), so text stays sharp and selectable, and long CVs paginate cleanly across multiple A4 pages.
 - **Feedback form** — an optional "Help Us Improve NeonCV" section on the landing page that delivers messages straight to a Telegram chat via a small serverless function (see [Setting up the Telegram bot](#setting-up-the-telegram-bot) below). CV content, photos, and personal data are never included.
 - **Anonymous analytics** — optional, privacy-friendly tracking of unique visitors, CVs created, PDF downloads, and feedback submissions, viewable on a secret-protected `/?admin=1` dashboard. No CV content, names, or identities are ever tracked (see [Setting up analytics](#setting-up-analytics-optional) below).
-- **CV Photo Studio** — click "Edit Photo" after uploading to open a built-in editor: crop/reposition by dragging, zoom, rotate, adjust brightness/contrast/saturation, pick a background (white/light gray/soft blue/transparent), and optionally remove the background with AI — all before applying the result to your CV. Editing is local and instant; only the "Remove Background" step calls a server, and only your active photo is ever sent, never CV content. See [Setting up the Photo Studio](#setting-up-the-photo-studio-optional) below.
+- **CV Photo Studio** — click "Edit Photo" after uploading to open a built-in editor: crop/reposition by dragging, zoom, rotate (including a fine-grained rotation slider), adjust brightness/contrast/saturation, pick a background (white/light gray/soft blue/transparent), undo/redo your edits, and remove the background with **free, on-device AI** — all before applying the result to your CV. Everything, including background removal, runs locally in your browser; nothing about your photo is ever uploaded anywhere. See [CV Photo Studio](#cv-photo-studio) below.
 - **Dark mode** — light and dark themes, remembered across visits.
 - **Fully responsive** — usable on desktop, tablet, and mobile, with a dedicated Edit/Preview toggle on small screens.
 - **Private by default** — the CV builder itself needs no account, no backend, and sends nothing anywhere. Everything lives in `localStorage` on your device, and you can delete all of it at any time. The optional feedback/analytics features (see below) only ever send anonymous, non-CV data if you choose to set them up.
@@ -44,10 +44,11 @@ Create tailored, professional CVs for job applications, internships, scholarship
 - Tailwind CSS (via CDN)
 - Vanilla JavaScript (no frameworks, no build step)
 - Browser `localStorage` for CV persistence
-- Three small Vercel serverless functions (`api/feedback.js`, `api/analytics.js`, `api/photo.js`) — plain Node.js, zero npm dependencies, used only for the optional feedback/analytics/AI-photo features
+- Two small Vercel serverless functions (`api/feedback.js`, `api/analytics.js`) — plain Node.js, zero npm dependencies, used only for the optional feedback/analytics features. (Background removal used to be a third function calling remove.bg; it's now fully browser-side and no longer needs a server at all.)
 - [jsPDF](https://github.com/parallax/jsPDF) (via CDN) — generates the downloadable PDF directly from real text, client-side, with no build step
 - [Upstash Redis](https://upstash.com) (optional) — free-tier REST-based storage for analytics counters and feedback/photo rate-limiting
-- An AI background-removal provider (optional — [remove.bg](https://www.remove.bg/api) by default) for the Photo Studio's "Remove Background" button
+- [@imgly/background-removal](https://github.com/imgly/background-removal-js) (via CDN, loaded only when the Photo Studio opens) — runs the "Remove Background" AI entirely in the browser via WebAssembly; free, no API key, no server round-trip
+- [face-api.js](https://github.com/justadudewhohacks/face-api.js) (via CDN, loaded only on demand) — powers the Photo Studio's optional "Analyze Photo" face-detection check, also entirely in the browser
 
 No React, no Vue, no TypeScript, no database, no ORM, no full backend server.
 
@@ -92,8 +93,7 @@ NeonCV/
 │
 ├── api/
 │   ├── feedback.js           # Vercel serverless function — delivers feedback to Telegram
-│   ├── analytics.js          # Vercel serverless function — anonymous usage counters
-│   └── photo.js              # Vercel serverless function — AI background removal for the Photo Studio
+│   └── analytics.js          # Vercel serverless function — anonymous usage counters
 │
 ├── assets/
 │   └── images/
@@ -115,7 +115,7 @@ NeonCV/
 5. Before clicking **Deploy**, open the **Environment Variables** section on that same screen (or add them afterward under **Project → Settings → Environment Variables**) and add the variables listed in `.env.example`:
    - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` — required for the feedback form (see next section).
    - `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` (or the `*_KV_REST_API_URL`/`*_KV_REST_API_TOKEN` names Vercel's Marketplace integration may generate instead), plus `ADMIN_SECRET` — optional, only needed for analytics (see the section after that).
-   - `PHOTO_AI_API_KEY` and `PHOTO_AI_PROVIDER` — optional, only needed for the Photo Studio's AI background removal (see [Setting up the Photo Studio](#setting-up-the-photo-studio-optional) further down).
+   - No environment variables are needed for the CV Photo Studio's AI features — both "Remove Background" and "Analyze Photo" run entirely in the browser (see [CV Photo Studio](#cv-photo-studio) further down).
 6. Click **Deploy**. After a minute or two, Vercel gives you a live URL like `https://neon-cv-builder.vercel.app`.
 7. Any time you change an environment variable, click **Redeploy** on the latest deployment (env vars only take effect on new deployments, not automatically).
 8. From then on, every `git push` to your repo's default branch triggers a new deployment automatically.
@@ -177,26 +177,20 @@ Never tracked or sent to any server: CV content, personal information, NRC, uplo
 
 ---
 
-## Setting up the Photo Studio (optional)
+## CV Photo Studio
 
-The Photo Studio's manual editing (crop/zoom/move/rotate/brightness/contrast/saturation/background/shape) always works, with no setup and no server calls. Only the **"Remove Background (AI)"** button needs configuration — everything else in this section is purely to enable that one feature.
+The Photo Studio's manual editing (crop/zoom/move/rotate/brightness/contrast/saturation/background/shape/undo/redo) always works, with zero setup and zero server calls. Its two AI features work the same way — **no signup, no API key, no environment variable, and no cost**, because both run entirely inside your browser:
 
-1. Sign up for an AI background-removal provider. The code ships with [remove.bg](https://www.remove.bg/api) wired up by default:
-   - Go to [remove.bg/api](https://www.remove.bg/api) and create an account, then choose the plan that fits your expected usage.
-   - Copy your **API key** from the remove.bg dashboard.
-2. In **Vercel → Project → Settings → Environment Variables**, add:
-   ```text
-   PHOTO_AI_API_KEY=your-remove.bg-api-key
-   PHOTO_AI_PROVIDER=removebg
-   ```
-3. Redeploy.
-4. Test it: in the CV editor, upload a photo, click **Edit Photo**, then **Remove Background (AI)**.
+- **Remove Background** — powered by [@imgly/background-removal](https://github.com/imgly/background-removal-js), which uses WebAssembly to run a real background-segmentation model on-device. Nothing about the photo is uploaded anywhere for this step.
+- **Analyze Photo** — powered by [face-api.js](https://github.com/justadudewhohacks/face-api.js), a browser-side face-detection library, to give a lightweight "photo quality" check (face visibility, framing, resolution) and a positioning suggestion. Same story: entirely local, nothing uploaded.
 
-If you'd rather use a different provider (e.g. Photoroom, withoutbg), everything provider-specific is isolated in one function — `removeBackgroundViaProvider()` in `api/photo.js` — so you can add another branch there without touching anything else. Only `PHOTO_AI_PROVIDER=removebg` is implemented out of the box.
+Both libraries are loaded lazily from a CDN — only when the Photo Studio actually opens, so they never slow down the landing page — and only the first click of "Remove Background" pays the cost of downloading the model data; the browser caches it after that.
 
-If `PHOTO_AI_API_KEY` isn't set, the "Remove Background" button shows a friendly error and a **Try Again** link — the rest of the Photo Studio, and CV creation in general, is completely unaffected. AI is an enhancement here, never a requirement.
+**Performance:** target is **≤10 seconds on supported modern devices** for "Remove Background" — not a guarantee, since it depends on the visitor's CPU/GPU, browser, and network speed for that first model download. The very first run in a fresh browser is typically the slowest (model download + first inference); later runs in the same session, and on repeat visits once the browser's cache is warm, are noticeably faster. If a run takes longer than expected, the UI shows "Still processing…" rather than failing — it keeps waiting rather than giving up early. Anonymous timing (no image data) is reported to `/api/analytics`, so the average shows up on the `/?admin=1` dashboard if you've set up analytics — see [Setting up analytics](#setting-up-analytics-optional) above.
 
-**Privacy:** only the one photo actively being edited is ever sent to `/api/photo` (and from there to the AI provider) — never CV content, never other saved CVs' photos, and nothing is logged or stored server-side. The AI only removes the background; it never generates a new face, changes your appearance, or applies beauty filters.
+**If it fails** (unsupported browser, no WebAssembly, model download blocked, low memory, etc.), the Photo Studio shows a plain-language error with **Try Again** and **Continue Without AI** — manual editing and finishing the CV are never blocked by an AI failure.
+
+**License note:** `@imgly/background-removal` is distributed under a non-permissive license (check its own `LICENSE.md` — historically AGPL/GPL-family, not MIT). It's used here as-is, which is fine for this free/portfolio project. If you plan to build a commercial product on top of NeonCV, review IMG.LY's license terms (or contact them directly) before relying on it in production — don't assume it's unrestricted commercial software.
 
 ---
 

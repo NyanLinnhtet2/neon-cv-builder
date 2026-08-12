@@ -1960,6 +1960,7 @@ function bindFeedbackForm() {
 
 /* ---------------------------------------------------------
    18f. PHOTO STUDIO — AI background removal + local editing
+        + free, client-side AI photo analysis (face-api.js)
 
    Editing pipeline: personal.photoOriginal is the untouched upload.
    Opening the studio always starts from that (plus the last-saved
@@ -1968,6 +1969,13 @@ function bindFeedbackForm() {
    used) into a single PNG stored in personal.photo — the same field
    the rest of the app (live preview, jsPDF) already reads, so no
    other rendering code needs to know the studio exists.
+
+   Two separate AI features, both browser-side, no API key, no cost:
+   - "Remove Background" uses @imgly/background-removal (WebAssembly,
+     loaded lazily from a CDN) — runs entirely on-device.
+   - "Analyze Photo" uses face-api.js (also loaded lazily from a CDN)
+     to detect the face and suggest positioning/quality improvements.
+     It never sends the photo anywhere.
    --------------------------------------------------------- */
 
 const PHOTO_STUDIO_CANVAS_SIZE = 320;
@@ -1978,6 +1986,7 @@ const PHOTO_STUDIO_BACKGROUNDS = [
   { key: 'transparent', label: 'Transparent', color: null },
 ];
 const PHOTO_STUDIO_DEFAULT_SETTINGS = { background: 'white', zoom: 1, positionX: 0, positionY: 0, rotation: 0, brightness: 0, contrast: 0, saturation: 0 };
+const PHOTO_STUDIO_HISTORY_LIMIT = 30;
 
 function openPhotoStudio() {
   const p = state.currentCV.personal;
@@ -1987,16 +1996,24 @@ function openPhotoStudio() {
   const source = p.photoOriginal || p.photo;
   if (!source) return;
   if (!p.photoOriginal) p.photoOriginal = p.photo; // capture a stable baseline for legacy CVs so future edits don't compound
+
+  const initialSettings = Object.assign({}, PHOTO_STUDIO_DEFAULT_SETTINGS, p.photoSettings || {});
   state.photoStudio = {
     sourceImage: source,
     bgRemovedImage: null,
+    bgRemovedObjectUrl: null,
+    aiRunning: false,
     loadedImg: null,
-    settings: Object.assign({}, PHOTO_STUDIO_DEFAULT_SETTINGS, p.photoSettings || {}),
+    settings: initialSettings,
+    history: { stack: [{ settings: Object.assign({}, initialSettings), bgRemovedImage: null }], index: 0 },
   };
   document.getElementById('photo-studio-ai-status').textContent = '';
+  document.getElementById('photo-studio-quality-panel').classList.add('hidden');
   renderPhotoStudioControls();
+  updatePhotoStudioHistoryButtons();
   loadPhotoStudioImage(source);
   checkPhotoStudioResolution(source);
+  preloadBackgroundRemoval();
   const modal = document.getElementById('photo-studio-modal');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -2006,6 +2023,9 @@ function closePhotoStudio() {
   const modal = document.getElementById('photo-studio-modal');
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+  if (state.photoStudio && state.photoStudio.bgRemovedObjectUrl) {
+    URL.revokeObjectURL(state.photoStudio.bgRemovedObjectUrl);
+  }
   state.photoStudio = null;
 }
 
@@ -2048,6 +2068,7 @@ function renderPhotoStudioControls() {
     state.photoStudio.settings.background = btn.dataset.bg;
     renderPhotoStudioControls();
     redrawPhotoStudioCanvas();
+    pushPhotoStudioHistory();
   }));
 
   const shapeEl = document.getElementById('photo-studio-shape-options');
@@ -2059,6 +2080,7 @@ function renderPhotoStudioControls() {
     renderPhotoStudioControls();
   }));
 
+  document.getElementById('photo-studio-rotation').value = s.rotation;
   document.getElementById('photo-studio-zoom').value = s.zoom;
   document.getElementById('photo-studio-brightness').value = s.brightness;
   document.getElementById('photo-studio-contrast').value = s.contrast;
@@ -2104,56 +2126,343 @@ function redrawPhotoStudioCanvas() {
 function rotatePhotoStudio(delta) {
   if (!state.photoStudio) return;
   const s = state.photoStudio.settings;
-  s.rotation = (s.rotation + delta + 360) % 360;
+  let deg = (s.rotation + delta) % 360;
+  if (deg > 180) deg -= 360;
+  if (deg < -180) deg += 360;
+  s.rotation = deg;
+  document.getElementById('photo-studio-rotation').value = deg;
   redrawPhotoStudioCanvas();
+  pushPhotoStudioHistory();
 }
 
 function resetPhotoStudio() {
   if (!state.photoStudio) return;
   state.photoStudio.settings = Object.assign({}, PHOTO_STUDIO_DEFAULT_SETTINGS);
+  if (state.photoStudio.bgRemovedObjectUrl) URL.revokeObjectURL(state.photoStudio.bgRemovedObjectUrl);
   state.photoStudio.bgRemovedImage = null;
+  state.photoStudio.bgRemovedObjectUrl = null;
   document.getElementById('photo-studio-ai-status').textContent = '';
+  document.getElementById('photo-studio-quality-panel').classList.add('hidden');
   loadPhotoStudioImage(state.photoStudio.sourceImage);
   renderPhotoStudioControls();
+  state.photoStudio.history = { stack: [{ settings: Object.assign({}, PHOTO_STUDIO_DEFAULT_SETTINGS), bgRemovedImage: null }], index: 0 };
+  updatePhotoStudioHistoryButtons();
+}
+
+/* ---------- Undo / Redo — lightweight in-memory history, never persisted ---------- */
+
+function pushPhotoStudioHistory() {
+  const st = state.photoStudio;
+  if (!st) return;
+  const snapshot = { settings: Object.assign({}, st.settings), bgRemovedImage: st.bgRemovedImage };
+  st.history.stack = st.history.stack.slice(0, st.history.index + 1);
+  st.history.stack.push(snapshot);
+  if (st.history.stack.length > PHOTO_STUDIO_HISTORY_LIMIT) st.history.stack.shift();
+  st.history.index = st.history.stack.length - 1;
+  updatePhotoStudioHistoryButtons();
+}
+
+function applyPhotoStudioHistorySnapshot(snapshot) {
+  const st = state.photoStudio;
+  st.settings = Object.assign({}, snapshot.settings);
+  st.bgRemovedImage = snapshot.bgRemovedImage;
+  loadPhotoStudioImage(st.bgRemovedImage || st.sourceImage);
+  renderPhotoStudioControls();
+}
+
+function photoStudioUndo() {
+  const st = state.photoStudio;
+  if (!st || st.history.index <= 0) return;
+  st.history.index -= 1;
+  applyPhotoStudioHistorySnapshot(st.history.stack[st.history.index]);
+  updatePhotoStudioHistoryButtons();
+}
+
+function photoStudioRedo() {
+  const st = state.photoStudio;
+  if (!st || st.history.index >= st.history.stack.length - 1) return;
+  st.history.index += 1;
+  applyPhotoStudioHistorySnapshot(st.history.stack[st.history.index]);
+  updatePhotoStudioHistoryButtons();
+}
+
+function updatePhotoStudioHistoryButtons() {
+  const st = state.photoStudio;
+  const undoBtn = document.getElementById('photo-studio-undo');
+  const redoBtn = document.getElementById('photo-studio-redo');
+  const canUndo = !!st && st.history.index > 0;
+  const canRedo = !!st && st.history.index < st.history.stack.length - 1;
+  undoBtn.disabled = !canUndo;
+  redoBtn.disabled = !canRedo;
+  undoBtn.classList.toggle('opacity-40', !canUndo);
+  redoBtn.classList.toggle('opacity-40', !canRedo);
+}
+
+/* ---------- Remove Background (AI, browser-side — @imgly/background-removal) ----------
+   Runs entirely on-device via WebAssembly; the photo is never uploaded anywhere for
+   this step. First run downloads model/WASM data from IMG.LY's CDN (cached by the
+   browser afterward), so the very first removal on a fresh browser can take
+   noticeably longer than the ~10s target for supported modern devices — later
+   removals in the same session, and on repeat visits once the browser cache is
+   warm, are faster.
+
+   License note: @imgly/background-removal is distributed under a non-permissive
+   license (check its LICENSE.md — historically AGPL/GPL-family, not MIT). It's
+   used here as-is for this free/portfolio project; a commercial SaaS built on
+   NeonCV should review IMG.LY's licensing terms before relying on it in
+   production. See README.md "CV Photo Studio" for the full note. */
+
+const BG_REMOVAL_CDN_URL = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+const BG_REMOVAL_MAX_DIMENSION = 2048; // downscale the AI working copy; the original upload is never touched
+const BG_REMOVAL_SOFT_TIMEOUT_MS = 10000;
+
+let bgRemovalLibraryPromise = null;
+let bgRemovalModuleReady = false; // true once the library+model has loaded successfully at least once this session
+
+function loadBackgroundRemovalLibrary() {
+  if (!bgRemovalLibraryPromise) {
+    bgRemovalLibraryPromise = import(BG_REMOVAL_CDN_URL).then((mod) => mod.default || mod.removeBackground || mod);
+  }
+  return bgRemovalLibraryPromise;
+}
+
+/**
+ * Called when the Photo Studio opens so the (fairly large) model download can
+ * start before the person even clicks "Remove Background" — the goal is that
+ * AI processing can start immediately once they do. Fire-and-forget; any
+ * failure here is silent, since clicking the button will retry and surface
+ * the real error at that point.
+ */
+function preloadBackgroundRemoval() {
+  if (bgRemovalModuleReady) return;
+  loadBackgroundRemovalLibrary().then(() => { bgRemovalModuleReady = true; }).catch(() => {});
+}
+
+/**
+ * Draws the source image onto a canvas capped at BG_REMOVAL_MAX_DIMENSION on
+ * its longest side, so a huge phone-camera photo isn't processed at full
+ * resolution. Returns a Blob (image/png).
+ */
+function prepareAiWorkingCopy(img) {
+  return new Promise((resolve) => {
+    const scale = Math.min(1, BG_REMOVAL_MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    canvas.toBlob((blob) => resolve(blob), 'image/png');
+  });
+}
+
+function resetPhotoStudioAiUi() {
+  const statusEl = document.getElementById('photo-studio-ai-status');
+  const actionsEl = document.getElementById('photo-studio-ai-actions');
+  const progressWrap = document.getElementById('photo-studio-ai-progress-wrap');
+  statusEl.textContent = '';
+  actionsEl.classList.add('hidden');
+  actionsEl.innerHTML = '';
+  progressWrap.classList.add('hidden');
+  document.getElementById('photo-studio-ai-progress-bar').style.width = '0%';
 }
 
 async function handlePhotoStudioRemoveBg() {
   const st = state.photoStudio;
-  if (!st) return;
+  if (!st || st.aiRunning) return; // only one AI job at a time
+  st.aiRunning = true;
+
   const statusEl = document.getElementById('photo-studio-ai-status');
+  const actionsEl = document.getElementById('photo-studio-ai-actions');
+  const progressWrap = document.getElementById('photo-studio-ai-progress-wrap');
+  const progressBar = document.getElementById('photo-studio-ai-progress-bar');
   const btn = document.getElementById('photo-studio-remove-bg');
 
-  statusEl.textContent = 'Removing background…';
-  statusEl.className = 'mt-2 text-xs text-center min-h-[1em] text-[#64748B]';
+  resetPhotoStudioAiUi();
   btn.disabled = true;
   btn.classList.add('opacity-60', 'pointer-events-none');
+
+  const setStatus = (text, tone) => {
+    statusEl.textContent = text;
+    statusEl.className = 'mt-2 text-xs text-center min-h-[1em] ' + (tone === 'error' ? 'text-red-500' : tone === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#64748B]');
+  };
+
   trackEvent('photo_ai_process');
+  const device = window.innerWidth < 768 ? 'mobile' : 'desktop';
+  const overallStart = performance.now();
+
+  setStatus(bgRemovalModuleReady
+    ? 'Removing background… your photo is being processed on this device.'
+    : 'Preparing AI Photo Tools… first-time setup may take a little longer.');
+  if (!bgRemovalModuleReady) progressWrap.classList.remove('hidden');
+
+  const softTimeout = setTimeout(() => {
+    setStatus('Still processing… this device may need a little more time.');
+  }, BG_REMOVAL_SOFT_TIMEOUT_MS);
 
   try {
-    const res = await fetch('/api/photo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: st.sourceImage }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) throw new Error(data.error || "We couldn't remove the background right now.");
+    const removeBackground = await loadBackgroundRemovalLibrary();
+    const modelReadyAt = performance.now();
+    bgRemovalModuleReady = true;
+    if (state.photoStudio !== st) return; // studio was closed while the model was loading
 
-    st.bgRemovedImage = data.image;
-    loadPhotoStudioImage(st.bgRemovedImage);
-    statusEl.textContent = 'Background removed successfully.';
-    statusEl.className = 'mt-2 text-xs text-center min-h-[1em] text-emerald-600 dark:text-emerald-400';
-    trackEvent('photo_ai_success');
+    setStatus('Removing background… your photo is being processed on this device.');
+    const sourceImg = st.loadedImg;
+    const workingCopy = await prepareAiWorkingCopy(sourceImg);
+
+    const resultBlob = await removeBackground(workingCopy, {
+      model: 'small',
+      progress: (key, current, total) => {
+        if (!total) return;
+        progressWrap.classList.remove('hidden');
+        progressBar.style.width = Math.round((current / total) * 100) + '%';
+      },
+    });
+
+    clearTimeout(softTimeout);
+    if (state.photoStudio !== st) return; // studio was closed mid-run
+
+    if (st.bgRemovedObjectUrl) URL.revokeObjectURL(st.bgRemovedObjectUrl); // release any previous result first
+    const objectUrl = URL.createObjectURL(resultBlob);
+    st.bgRemovedObjectUrl = objectUrl;
+    st.bgRemovedImage = objectUrl;
+    loadPhotoStudioImage(objectUrl);
+
+    const totalMs = Math.round(performance.now() - overallStart);
+    const processingMs = Math.round(performance.now() - modelReadyAt);
+    setStatus('✓ Background removed — your photo is ready to edit.', 'success');
+    progressWrap.classList.add('hidden');
+    trackEvent('photo_ai_success', { durationMs: totalMs, processingMs, device });
+    pushPhotoStudioHistory();
   } catch (err) {
-    statusEl.innerHTML = `${escapeHtml(err.message || "We couldn't remove the background right now.")} <button id="photo-studio-ai-retry" class="underline font-semibold">Try Again</button>`;
-    statusEl.className = 'mt-2 text-xs text-center min-h-[1em] text-red-500';
-    const retryBtn = document.getElementById('photo-studio-ai-retry');
-    if (retryBtn) retryBtn.addEventListener('click', handlePhotoStudioRemoveBg);
-    trackEvent('photo_ai_failure');
+    clearTimeout(softTimeout);
+    console.error('NeonCV Photo Studio: background removal failed', err);
+    setStatus("Couldn't remove the background automatically. You can still use the photo editor normally.", 'error');
+    progressWrap.classList.add('hidden');
+    actionsEl.classList.remove('hidden');
+    actionsEl.innerHTML = `
+      <button id="photo-studio-ai-retry" class="text-xs font-semibold text-violet-bright underline">Try Again</button>
+      <button id="photo-studio-ai-continue" class="text-xs font-semibold text-[#64748B] underline">Continue Without AI</button>
+    `;
+    document.getElementById('photo-studio-ai-retry').addEventListener('click', handlePhotoStudioRemoveBg);
+    document.getElementById('photo-studio-ai-continue').addEventListener('click', resetPhotoStudioAiUi);
+    trackEvent('photo_ai_failure', { device });
+  } finally {
+    st.aiRunning = false;
+    btn.disabled = false;
+    btn.classList.remove('opacity-60', 'pointer-events-none');
+  }
+}
+
+/* ---------- Analyze Photo (AI, free — runs entirely in the browser) ----------
+   Uses face-api.js (tiny_face_detector) loaded lazily from a CDN. No API key,
+   no server round-trip, no cost — the photo never leaves the browser for this
+   step. Only runs when the person explicitly clicks "Analyze Photo", never
+   automatically. Purely a recommendation layer: the person stays in full
+   manual control of crop/zoom/position regardless of what this suggests. */
+
+const PHOTO_ANALYSIS_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+const PHOTO_ANALYSIS_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js/weights';
+let photoAnalysisLoadPromise = null;
+
+function loadPhotoAnalysisLibrary() {
+  if (photoAnalysisLoadPromise) return photoAnalysisLoadPromise;
+  photoAnalysisLoadPromise = (async () => {
+    if (!window.faceapi) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = PHOTO_ANALYSIS_SCRIPT_URL;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Could not load the photo analysis library.'));
+        document.head.appendChild(script);
+      });
+    }
+    await window.faceapi.nets.tinyFaceDetector.loadFromUri(PHOTO_ANALYSIS_MODEL_URL);
+  })();
+  return photoAnalysisLoadPromise;
+}
+
+async function handlePhotoStudioAnalyze() {
+  const st = state.photoStudio;
+  if (!st) return;
+  const panel = document.getElementById('photo-studio-quality-panel');
+  const btn = document.getElementById('photo-studio-analyze');
+
+  panel.classList.remove('hidden');
+  panel.innerHTML = `<p class="text-xs text-[#64748B]">Analyzing photo…</p>`;
+  btn.disabled = true;
+  btn.classList.add('opacity-60', 'pointer-events-none');
+
+  try {
+    await loadPhotoAnalysisLibrary();
+    const canvas = document.getElementById('photo-studio-canvas');
+    const detection = await window.faceapi.detectSingleFace(canvas, new window.faceapi.TinyFaceDetectorOptions());
+    renderPhotoQualityResults(detection);
+  } catch (err) {
+    panel.innerHTML = `<p class="text-xs text-[#64748B]">Couldn't analyze this photo right now — you can still crop and position it manually.</p>`;
   } finally {
     btn.disabled = false;
     btn.classList.remove('opacity-60', 'pointer-events-none');
   }
 }
+
+function renderPhotoQualityResults(detection) {
+  const panel = document.getElementById('photo-studio-quality-panel');
+  const size = PHOTO_STUDIO_CANVAS_SIZE;
+  const img = state.photoStudio.loadedImg;
+  const items = [];
+
+  const lowRes = img && (img.naturalWidth < 400 || img.naturalHeight < 400);
+  items.push({ ok: !lowRes, label: lowRes ? 'Image resolution is a bit low' : 'Resolution looks good' });
+
+  if (!detection) {
+    items.push({ ok: false, label: 'Face is not clearly detected' });
+    panel.innerHTML = renderPhotoQualityList(items) +
+      `<p class="text-xs text-amber-600 dark:text-amber-400 mt-2">Try centering your face, using better lighting, or a less busy background.</p>`;
+    return;
+  }
+
+  const box = detection.box;
+  items.push({ ok: true, label: 'Face is clearly visible' });
+
+  const faceRatio = box.width / size;
+  const sizeIssue = faceRatio < 0.18 ? 'zoom in a little (subject looks small)' : faceRatio > 0.65 ? 'zoom out a little (subject looks very close)' : null;
+  items.push({ ok: !sizeIssue, label: sizeIssue ? 'Subject size could improve' : 'Subject size looks good' });
+
+  const headroom = box.top;
+  const centerX = box.x + box.width / 2;
+  const recommendations = [];
+  if (sizeIssue) recommendations.push(sizeIssue);
+  if (headroom < size * 0.05) recommendations.push('move the subject down slightly');
+  else if (headroom > size * 0.28) recommendations.push('move the subject up slightly');
+  if (centerX < size * 0.35) recommendations.push('move the subject right slightly');
+  else if (centerX > size * 0.65) recommendations.push('move the subject left slightly');
+
+  const positioningOk = recommendations.length === (sizeIssue ? 1 : 0);
+  items.push({ ok: positioningOk, label: positioningOk ? 'Positioning looks good' : 'Positioning could improve' });
+
+  let html = renderPhotoQualityList(items);
+  if (recommendations.length) {
+    html += `<p class="text-xs text-amber-600 dark:text-amber-400 mt-2">Suggestion: ${escapeHtml(recommendations.join(', '))}. This is just a recommendation — drag and zoom to adjust however you like.</p>`;
+  }
+  panel.innerHTML = html;
+}
+
+function renderPhotoQualityList(items) {
+  return `
+    <p class="text-xs font-semibold text-[#64748B] mb-1.5">Photo Quality</p>
+    <ul class="space-y-1">
+      ${items.map((i) => `
+        <li class="flex items-center gap-2 text-xs">
+          <span class="${i.ok ? 'text-emerald-500' : 'text-amber-500'}">${i.ok ? '✓' : '⚠'}</span>
+          <span class="${i.ok ? 'text-[#475569] dark:text-[#94A3B8]' : ''}">${escapeHtml(i.label)}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+}
+
+/* ---------- Apply / drag / bindings ---------- */
 
 function applyPhotoStudio() {
   const st = state.photoStudio;
@@ -2190,7 +2499,10 @@ function bindPhotoStudioDrag() {
     state.photoStudio.settings.positionY = startPosY + (y - startY) * f;
     redrawPhotoStudioCanvas();
   };
-  const end = () => { dragging = false; };
+  const end = () => {
+    if (dragging) pushPhotoStudioHistory();
+    dragging = false;
+  };
 
   canvas.addEventListener('mousedown', (e) => start(e.clientX, e.clientY));
   window.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
@@ -2207,15 +2519,22 @@ function bindPhotoStudioControls() {
   document.getElementById('photo-studio-apply').addEventListener('click', applyPhotoStudio);
   document.getElementById('photo-studio-reset').addEventListener('click', resetPhotoStudio);
   document.getElementById('photo-studio-remove-bg').addEventListener('click', handlePhotoStudioRemoveBg);
+  document.getElementById('photo-studio-analyze').addEventListener('click', handlePhotoStudioAnalyze);
+  document.getElementById('photo-studio-undo').addEventListener('click', photoStudioUndo);
+  document.getElementById('photo-studio-redo').addEventListener('click', photoStudioRedo);
   document.getElementById('photo-studio-rotate-left').addEventListener('click', () => rotatePhotoStudio(-90));
   document.getElementById('photo-studio-rotate-right').addEventListener('click', () => rotatePhotoStudio(90));
 
-  ['zoom', 'brightness', 'contrast', 'saturation'].forEach((key) => {
-    document.getElementById('photo-studio-' + key).addEventListener('input', (e) => {
+  ['rotation', 'zoom', 'brightness', 'contrast', 'saturation'].forEach((key) => {
+    const input = document.getElementById('photo-studio-' + key);
+    // 'input' fires continuously while dragging — live redraw only, no history spam.
+    input.addEventListener('input', (e) => {
       if (!state.photoStudio) return;
       state.photoStudio.settings[key] = Number(e.target.value);
       redrawPhotoStudioCanvas();
     });
+    // 'change' fires once the person releases the slider — that's the point to snapshot for undo.
+    input.addEventListener('change', () => pushPhotoStudioHistory());
   });
 
   bindPhotoStudioDrag();
@@ -2272,11 +2591,23 @@ function renderAdminData(data) {
       </div>
     </div>
   `;
+  const photoAi = data.photoAi || { avgDurationMs: null, sampleCount: 0 };
+  const aiCard = `
+    <div class="p-5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#12141C]">
+      <p class="text-xs font-semibold text-[#64748B] uppercase tracking-wide mb-2">On-device AI: Avg. Remove Background Time</p>
+      <p class="font-display font-semibold text-3xl mb-3">${photoAi.avgDurationMs !== null ? (photoAi.avgDurationMs / 1000).toFixed(1) + 's' : '—'}</p>
+      <div class="flex gap-4 text-xs text-[#64748B]">
+        <span>Target: <strong class="text-[#0F172A] dark:text-white">≤10s</strong></span>
+        <span>Based on: <strong class="text-[#0F172A] dark:text-white">${photoAi.sampleCount.toLocaleString()} run${photoAi.sampleCount === 1 ? '' : 's'}</strong></span>
+      </div>
+    </div>
+  `;
   dataEl.innerHTML =
     card('Visitors (unique)', data.visitors) +
     card('CVs Created', data.cvCreated) +
     card('PDF Downloads', data.pdfDownloads) +
-    card('Feedback Submitted', data.feedback);
+    card('Feedback Submitted', data.feedback) +
+    aiCard;
 }
 
 function bindGlobalEvents() {

@@ -97,6 +97,28 @@ async function readUniqueVisitors() {
   return { total: Number(total) || 0, today: Number(today) || 0, thisMonth: Number(month) || 0 };
 }
 
+// ---- anonymous timing sample for photo_ai_success (lets the owner see whether
+// the ~10s on-device background-removal target is actually being hit) ----
+
+async function recordAiDuration(durationMs) {
+  const ms = Number(durationMs);
+  if (!Number.isFinite(ms) || ms < 0 || ms > 10 * 60 * 1000) return; // ignore garbage/implausible values
+  await Promise.all([
+    redisCmd(['INCRBY', 'neoncv:photo_ai:duration_sum_ms', String(Math.round(ms))]),
+    redisCmd(['INCR', 'neoncv:photo_ai:duration_count']),
+  ]);
+}
+
+async function readAiDurationStats() {
+  const [sum, count] = await Promise.all([
+    redisCmd(['GET', 'neoncv:photo_ai:duration_sum_ms']),
+    redisCmd(['GET', 'neoncv:photo_ai:duration_count']),
+  ]);
+  const sampleCount = Number(count) || 0;
+  const avgDurationMs = sampleCount > 0 ? Math.round(Number(sum) / sampleCount) : null;
+  return { avgDurationMs, sampleCount };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === 'POST') {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -114,6 +136,9 @@ module.exports = async function handler(req, res) {
       return;
     }
     await incrementCounter(event);
+    if (event === 'photo_ai_success' && body.meta && body.meta.durationMs !== undefined) {
+      await recordAiDuration(body.meta.durationMs);
+    }
     res.status(200).json({ ok: true });
     return;
   }
@@ -124,13 +149,14 @@ module.exports = async function handler(req, res) {
       res.status(401).json({ ok: false, error: 'Unauthorized.' });
       return;
     }
-    const [visitors, cvCreated, pdfDownloads, feedback] = await Promise.all([
+    const [visitors, cvCreated, pdfDownloads, feedback, photoAi] = await Promise.all([
       readUniqueVisitors(),
       readCounter('cv_created'),
       readCounter('pdf_download'),
       readCounter('feedback_submitted'),
+      readAiDurationStats(),
     ]);
-    res.status(200).json({ ok: true, visitors, cvCreated, pdfDownloads, feedback });
+    res.status(200).json({ ok: true, visitors, cvCreated, pdfDownloads, feedback, photoAi });
     return;
   }
 
