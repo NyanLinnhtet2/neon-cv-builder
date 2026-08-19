@@ -2293,7 +2293,7 @@ const PHOTO_STUDIO_CANVAS_SIZE = 320;
 const PHOTO_STUDIO_BACKGROUNDS = [
   { key: 'white', label: 'White', color: '#FFFFFF' },
   { key: 'lightgray', label: 'Light Gray', color: '#E5E7EB' },
-  { key: 'softblue', label: 'Soft Blue', color: '#DBEAFE' },
+  { key: 'softblue', label: 'Soft Blue', color: '#0096FF' },
   { key: 'transparent', label: 'Transparent', color: null },
 ];
 const PHOTO_STUDIO_DEFAULT_SETTINGS = { background: 'white', zoom: 1, positionX: 0, positionY: 0, rotation: 0, brightness: 0, contrast: 0, saturation: 0 };
