@@ -131,14 +131,17 @@ const LIST_SCHEMA = {
     fields: [
       { name: 'degree', label: 'Degree', type: 'text', required: true },
       { name: 'institution', label: 'Institution', type: 'text', required: true },
+      { name: 'major', label: 'Major / Subject', type: 'text' },
       { name: 'location', label: 'Location', type: 'text' },
       { name: 'startDate', label: 'Start Date', type: 'month' },
       { name: 'endDate', label: 'End Date', type: 'month' },
+      { name: 'resultGrade', label: 'Result / Grade', type: 'text', placeholder: 'e.g. Distinction, 3.8 GPA' },
       { name: 'description', label: 'Description', type: 'textarea' },
     ],
     title: (e) => e.degree || 'New degree',
-    subtitle: (e) => e.institution,
+    subtitle: (e) => [e.institution, e.major].filter(Boolean).join(' — '),
     meta: (e) => dateRange(e.startDate, e.endDate),
+    extra: (e) => e.resultGrade ? 'Result: ' + e.resultGrade : '',
   },
   projects: {
     fields: [
@@ -359,6 +362,14 @@ function applySampleData(cv, purposeKey, contextKey) {
     cv.personal.nrc = '12/AhMaYa(N)123456';
     cv.personal.showNrc = false; // stored, not shown, until the user opts in
     cv.personal.phone = cv.personal.phone || '+95 9 123 456 789';
+    cv.personal.fatherName = cv.personal.fatherName || 'U Kyaw Than';
+    cv.personal.nationality = cv.personal.nationality || 'Myanmar';
+    cv.personal.race = cv.personal.race || 'Bamar';
+    cv.personal.religion = cv.personal.religion || 'Buddhist';
+    cv.personal.maritalStatus = cv.personal.maritalStatus || 'Single';
+    if (cv.template === 'myanmar-local') {
+      cv.orgHeader.formTitle = cv.orgHeader.formTitle || 'Personal Record Form for Job Application';
+    }
   } else if (international) {
     cv.personal.location = INTERNATIONAL_LOCATIONS[purposeKey] || 'Remote';
     cv.personal.phone = '+1 555 123 4567';
@@ -398,9 +409,10 @@ function blankCV(purposeKey, contextKey, useSample) {
     title: purposeLabel(purposeKey) + ' CV',
     purpose: purposeKey,
     context: contextKey || 'general',
-    template: 'modern',
+    template: isMyanmarContext(contextKey) ? 'myanmar-local' : 'modern',
     createdAt: now,
     updatedAt: now,
+    orgHeader: { organizationName: '', department: '', formTitle: '', logo: '' },
     personal: {
       fullName: '', jobTitle: '', email: '', phone: '', location: '',
       website: '', linkedin: '', github: '',
@@ -409,6 +421,8 @@ function blankCV(purposeKey, contextKey, useSample) {
       nrc: '', showNrc: false,
       dateOfBirth: '', showDateOfBirth: false,
       gender: '', showGender: false,
+      fatherName: '', nationality: '', race: '', religion: '',
+      maritalStatus: '', bloodGroup: '', height: '', weight: '',
     },
     summary: '',
     skills: { technical: [], soft: [] },
@@ -444,6 +458,16 @@ function normalizeCV(cv) {
   if (p.showDateOfBirth === undefined) p.showDateOfBirth = false;
   if (p.gender === undefined) p.gender = '';
   if (p.showGender === undefined) p.showGender = false;
+  if (p.fatherName === undefined) p.fatherName = '';
+  if (p.nationality === undefined) p.nationality = '';
+  if (p.race === undefined) p.race = '';
+  if (p.religion === undefined) p.religion = '';
+  if (p.maritalStatus === undefined) p.maritalStatus = '';
+  if (p.bloodGroup === undefined) p.bloodGroup = '';
+  if (p.height === undefined) p.height = '';
+  if (p.weight === undefined) p.weight = '';
+  if (!cv.orgHeader) cv.orgHeader = { organizationName: '', department: '', formTitle: '', logo: '' };
+  if (cv.template === undefined) cv.template = 'modern';
   LIST_SECTION_KEYS.forEach((key) => { if (!cv.entries[key]) cv.entries[key] = []; });
   return cv;
 }
@@ -829,6 +853,32 @@ function templateMiniSvg(key) {
       <rect x="6" y="53" width="48" height="1.2" fill="#E2E8F0"/>
     </svg>`;
   }
+  if (key === 'myanmar-local') {
+    return `<svg viewBox="0 0 60 84" class="w-full h-auto">
+      <rect width="60" height="84" fill="#fff"/>
+      <rect x="8" y="6" width="34" height="1.6" fill="#0B1220"/>
+      <rect x="12" y="9" width="26" height="1.3" fill="#475569"/>
+      <rect x="10" y="12.5" width="30" height="1.6" fill="#0B1220"/>
+      <rect x="46" y="5" width="9" height="11" fill="#E2E8F0" stroke="#94A3B8" stroke-width="0.4"/>
+      <rect x="6" y="20" width="4" height="2" fill="#334155"/>
+      <rect x="13" y="20" width="18" height="1.4" fill="#334155"/>
+      <rect x="34" y="20" width="20" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="25" width="4" height="2" fill="#334155"/>
+      <rect x="13" y="25" width="18" height="1.4" fill="#334155"/>
+      <rect x="34" y="25" width="20" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="30" width="4" height="2" fill="#334155"/>
+      <rect x="13" y="30" width="18" height="1.4" fill="#334155"/>
+      <rect x="34" y="30" width="20" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="35" width="4" height="2" fill="#334155"/>
+      <rect x="13" y="35" width="18" height="1.4" fill="#334155"/>
+      <rect x="34" y="35" width="20" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="40" width="4" height="2" fill="#334155"/>
+      <rect x="13" y="40" width="18" height="1.4" fill="#334155"/>
+      <rect x="34" y="40" width="20" height="1.2" fill="#CBD5E1"/>
+      <rect x="6" y="45" width="4" height="2" fill="#334155"/>
+      <rect x="13" y="45" width="24" height="1.4" fill="#334155"/>
+    </svg>`;
+  }
   // modern (default)
   return `<svg viewBox="0 0 60 84" class="w-full h-auto">
     <rect width="60" height="84" fill="#fff"/>
@@ -851,15 +901,16 @@ function renderTemplatePickerIfPersonal(key) {
     { key: 'modern', label: 'Modern' },
     { key: 'classic', label: 'Classic' },
     { key: 'academic', label: 'Academic' },
+    { key: 'myanmar-local', label: 'Myanmar Local' },
   ];
   return `
     <div class="mt-8 pt-6 border-t border-black/5 dark:border-white/10">
       <p class="text-sm font-semibold mb-3">Template</p>
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-4 gap-2">
         ${templates.map((t) => `
           <button data-template="${t.key}" class="template-btn rounded-lg border overflow-hidden text-center transition ${state.currentCV.template === t.key ? 'border-violet ring-1 ring-violet' : 'border-black/10 dark:border-white/10 hover:border-violet'}">
             <span class="block bg-[#F1F5F9] dark:bg-[#1A1D29] p-1.5">${templateMiniSvg(t.key)}</span>
-            <span class="block py-1.5 text-xs font-medium ${state.currentCV.template === t.key ? 'text-violet-bright' : ''}">${t.label}</span>
+            <span class="block py-1.5 text-[11px] font-medium leading-tight ${state.currentCV.template === t.key ? 'text-violet-bright' : ''}">${t.label}</span>
           </button>
         `).join('')}
       </div>
@@ -947,7 +998,7 @@ function renderPersonalForm() {
     </div>
   `;
 
-  const myanmarBlock = isMyanmarContext(cv.context) ? `
+  const myanmarBlock = (isMyanmarContext(cv.context) || cv.template === 'myanmar-local') ? `
     <div class="pt-4 border-t border-black/5 dark:border-white/10 space-y-4">
       <div>
         <div class="flex items-center justify-between mb-1.5">
@@ -997,6 +1048,53 @@ function renderPersonalForm() {
           Show gender on CV
         </label>
       </div>
+      <div class="grid grid-cols-2 gap-3">
+        ${field('fatherName', "Father's Name")}
+        ${field('nationality', 'Nationality', 'text', 'Myanmar')}
+        ${field('race', 'Race', 'text', 'Bamar')}
+        ${field('religion', 'Religion', 'text', 'Buddhist')}
+        ${field('maritalStatus', 'Marital Status', 'text', 'Single')}
+        ${field('bloodGroup', 'Blood Group', 'text', 'O')}
+        ${field('height', 'Height', 'text', '5\'6"')}
+        ${field('weight', 'Weight', 'text', '60 kg')}
+      </div>
+      <p class="text-[11px] text-[#94A3B8]">These are only shown on your CV if you fill them in — none are required.</p>
+    </div>
+  ` : '';
+
+  const orgHeaderBlock = cv.template === 'myanmar-local' ? `
+    <div class="pt-4 border-t border-black/5 dark:border-white/10 space-y-4">
+      <p class="text-xs font-semibold text-[#64748B]">Organization Header <span class="font-normal text-[#94A3B8]">(shown at the top of the Myanmar Local document)</span></p>
+      <div>
+        <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Organization / Ministry / Company Name</label>
+        <input data-org="organizationName" type="text" value="${escapeHtml(cv.orgHeader.organizationName)}" placeholder="e.g. ABC Company Limited"
+          class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Department / Division</label>
+        <input data-org="department" type="text" value="${escapeHtml(cv.orgHeader.department)}" placeholder="e.g. Human Resources Department"
+          class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Form Title</label>
+        <input data-org="formTitle" type="text" value="${escapeHtml(cv.orgHeader.formTitle)}" placeholder="e.g. Job Application Form / ကိုယ်ရေးမှတ်တမ်း"
+          class="w-full px-3 py-2.5 rounded-lg border border-black/10 dark:border-white/10 bg-transparent text-sm focus:outline-none focus:border-violet transition">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-[#64748B] mb-1.5">Logo (optional)</label>
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-14 shrink-0 bg-black/5 dark:bg-white/5 border border-dashed border-black/15 dark:border-white/15 flex items-center justify-center overflow-hidden text-[10px] text-[#94A3B8]">
+            ${cv.orgHeader.logo ? `<img src="${cv.orgHeader.logo}" alt="Logo" class="w-full h-full object-contain">` : 'Logo'}
+          </div>
+          <div class="flex gap-2">
+            <label class="cursor-pointer px-3 py-2 rounded-lg border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold transition">
+              ${cv.orgHeader.logo ? 'Change' : 'Upload'}
+              <input id="org-logo-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
+            </label>
+            ${cv.orgHeader.logo ? `<button id="btn-remove-org-logo" class="px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition">Remove</button>` : ''}
+          </div>
+        </div>
+      </div>
     </div>
   ` : '';
 
@@ -1012,6 +1110,7 @@ function renderPersonalForm() {
       ${field('website', 'Website', 'text', 'yourname.com')}
       ${field('github', 'Portfolio', 'text', 'yourportfolio.com')}
       ${myanmarBlock}
+      ${orgHeaderBlock}
     </div>
   `;
 }
@@ -1178,6 +1277,45 @@ function bindSectionFormEvents(key) {
       // Validate only once the person has finished typing a part, so the
       // error doesn't flash while they're still filling in the other three.
       input.addEventListener('blur', () => validatePersonalField('nrc', syncNrc()));
+    });
+  }
+
+  // Organization header (Myanmar Local template) — name/department/form title
+  area.querySelectorAll('[data-org]').forEach((input) => {
+    input.addEventListener('input', () => {
+      state.currentCV.orgHeader[input.dataset.org] = input.value;
+      renderCVPreview();
+      scheduleAutosave();
+    });
+  });
+
+  const orgLogoInput = area.querySelector('#org-logo-input');
+  if (orgLogoInput) {
+    orgLogoInput.addEventListener('change', () => {
+      const file = orgLogoInput.files && orgLogoInput.files[0];
+      if (!file) return;
+      if (!PHOTO_ALLOWED_TYPES.includes(file.type) || file.size > PHOTO_MAX_BYTES) {
+        showToast('Please upload a JPG, PNG, or WEBP image under 2 MB.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.currentCV.orgHeader.logo = reader.result;
+        renderSectionForm();
+        renderCVPreview();
+        scheduleAutosave();
+      };
+      reader.onerror = () => showToast('Could not read that image. Please try another file.', 'error');
+      reader.readAsDataURL(file);
+    });
+  }
+  const removeOrgLogoBtn = area.querySelector('#btn-remove-org-logo');
+  if (removeOrgLogoBtn) {
+    removeOrgLogoBtn.addEventListener('click', () => {
+      state.currentCV.orgHeader.logo = '';
+      renderSectionForm();
+      renderCVPreview();
+      scheduleAutosave();
     });
   }
 
@@ -1384,32 +1522,15 @@ function renderCVPreview() {
   paper.className = 'cv-paper template-' + cv.template;
 
   const p = cv.personal;
-  const contactBits = [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean);
+  const isMyanmarLocal = cv.template === 'myanmar-local';
 
-  const extraBits = [];
-  if (p.showNrc && p.nrc) extraBits.push('NRC: ' + p.nrc);
-  if (p.showDateOfBirth && p.dateOfBirth) extraBits.push('DOB: ' + formatDate(p.dateOfBirth));
-  if (p.showGender && p.gender) extraBits.push(p.gender);
-
-  const showPhotoNow = p.showPhoto && p.photo;
-
-  let html = `
-    <header class="cv-header ${showPhotoNow ? 'has-photo' : ''}">
-      ${showPhotoNow ? `<div class="cv-photo cv-photo-${p.photoShape || 'circle'}"><img src="${p.photo}" alt=""></div>` : ''}
-      <div class="cv-header-text">
-        <h1 class="cv-name">${escapeHtml(p.fullName) || 'Your Name'}</h1>
-        ${p.jobTitle ? `<p class="cv-title">${escapeHtml(p.jobTitle)}</p>` : ''}
-        ${contactBits.length ? `<p class="cv-contact">${contactBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
-        ${extraBits.length ? `<p class="cv-contact">${extraBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
-      </div>
-    </header>
-  `;
+  let html = isMyanmarLocal ? renderMyanmarLocalHeader(cv) : renderStandardHeader(cv);
 
   const enabledOrdered = cv.sectionOrder.filter((key) => cv.sectionEnabled[key] && key !== 'personal');
 
   enabledOrdered.forEach((key) => {
     if (key === 'summary') {
-      if (cv.summary.trim()) html += `<section class="cv-section"><h2 class="cv-heading">Summary</h2><p class="cv-text">${nl2br(cv.summary)}</p></section>`;
+      if (cv.summary.trim()) html += `<section class="cv-section"><h2 class="cv-heading">${isMyanmarLocal ? 'Objective / Remarks' : 'Summary'}</h2><p class="cv-text">${nl2br(cv.summary)}</p></section>`;
       return;
     }
     if (key === 'skills') {
@@ -1430,6 +1551,7 @@ function renderCVPreview() {
         const title = escapeHtml(schema.title(entry));
         const subtitle = escapeHtml(schema.subtitle(entry) || '');
         const meta = escapeHtml(schema.meta(entry) || '');
+        const extra = schema.extra ? escapeHtml(schema.extra(entry) || '') : '';
         const hasDesc = 'description' in entry;
         html += `
           <div class="cv-entry">
@@ -1437,6 +1559,7 @@ function renderCVPreview() {
               <span class="cv-entry-title">${title}${subtitle ? ` — <span class="cv-entry-subtitle">${subtitle}</span>` : ''}</span>
               ${meta ? `<span class="cv-entry-meta">${meta}</span>` : ''}
             </div>
+            ${extra ? `<p class="cv-text">${extra}</p>` : ''}
             ${entry.url ? `<a class="cv-entry-link" href="${escapeHtml(entry.url)}">${escapeHtml(entry.url)}</a>` : ''}
             ${entry.credentialUrl ? `<a class="cv-entry-link" href="${escapeHtml(entry.credentialUrl)}">${escapeHtml(entry.credentialUrl)}</a>` : ''}
             ${entry.githubUrl || entry.liveUrl ? `<p class="cv-entry-link">${[entry.githubUrl, entry.liveUrl].filter(Boolean).map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
@@ -1450,6 +1573,59 @@ function renderCVPreview() {
 
   paper.innerHTML = html;
   renderReadinessPanel();
+}
+
+function renderStandardHeader(cv) {
+  const p = cv.personal;
+  const contactBits = [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean);
+  const extraBits = [];
+  if (p.showNrc && p.nrc) extraBits.push('NRC: ' + p.nrc);
+  if (p.showDateOfBirth && p.dateOfBirth) extraBits.push('DOB: ' + formatDate(p.dateOfBirth));
+  if (p.showGender && p.gender) extraBits.push(p.gender);
+  const showPhotoNow = p.showPhoto && p.photo;
+
+  return `
+    <header class="cv-header ${showPhotoNow ? 'has-photo' : ''}">
+      ${showPhotoNow ? `<div class="cv-photo cv-photo-${p.photoShape || 'circle'}"><img src="${p.photo}" alt=""></div>` : ''}
+      <div class="cv-header-text">
+        <h1 class="cv-name">${escapeHtml(p.fullName) || 'Your Name'}</h1>
+        ${p.jobTitle ? `<p class="cv-title">${escapeHtml(p.jobTitle)}</p>` : ''}
+        ${contactBits.length ? `<p class="cv-contact">${contactBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
+        ${extraBits.length ? `<p class="cv-contact">${extraBits.map(escapeHtml).join(' &nbsp;·&nbsp; ')}</p>` : ''}
+      </div>
+    </header>
+  `;
+}
+
+/**
+ * Myanmar Local template header: dynamic organization/ministry header,
+ * a numbered personal-information block (colon-aligned label:value, the
+ * structural convention used by Myanmar CVs and application forms), and
+ * a photo box positioned top-right — inspired by common local document
+ * structure, not copied from any single source.
+ */
+function renderMyanmarLocalHeader(cv) {
+  const p = cv.personal;
+  const org = cv.orgHeader;
+  const showPhotoNow = p.showPhoto && p.photo;
+
+  const rows = getMyanmarLocalRows(cv)
+    .map(([label, value]) => `<li class="mlocal-row"><span class="mlocal-label">${escapeHtml(label)}</span><span class="mlocal-colon">–</span><span class="mlocal-value">${escapeHtml(value)}</span></li>`)
+    .join('');
+
+  return `
+    <header class="mlocal-header">
+      ${org.logo ? `<img class="mlocal-logo" src="${org.logo}" alt="">` : ''}
+      ${org.organizationName ? `<p class="mlocal-org">${escapeHtml(org.organizationName)}</p>` : ''}
+      ${org.department ? `<p class="mlocal-dept">${escapeHtml(org.department)}</p>` : ''}
+      <p class="mlocal-form-title">${org.formTitle ? escapeHtml(org.formTitle) : 'Personal Record Form'}</p>
+    </header>
+    <div class="mlocal-body">
+      ${showPhotoNow ? `<div class="mlocal-photo-box"><img src="${p.photo}" alt=""></div>` : '<div class="mlocal-photo-box mlocal-photo-empty"></div>'}
+      <ol class="mlocal-fields">${rows}</ol>
+    </div>
+    ${p.jobTitle ? `<p class="mlocal-applied-for"><span class="mlocal-label">Applied Position</span><span class="mlocal-colon">–</span><span class="mlocal-value">${escapeHtml(p.jobTitle)}</span></p>` : ''}
+  `;
 }
 
 /* ---------------------------------------------------------
@@ -1641,7 +1817,59 @@ const PDF_TEMPLATE_STYLES = {
   modern: { font: 'helvetica', heading: [124, 58, 237], name: [15, 23, 42], align: 'left', headingStyle: 'rule' },
   classic: { font: 'times', heading: [17, 24, 39], name: [17, 24, 39], align: 'center', headingStyle: 'rule' },
   academic: { font: 'helvetica', heading: [11, 18, 32], name: [11, 18, 32], align: 'left', headingStyle: 'fill' },
+  'myanmar-local': { font: 'helvetica', heading: [11, 18, 32], name: [11, 18, 32], align: 'left', headingStyle: 'rule' },
 };
+
+// Loaded lazily and only for the Myanmar Local template, so English-only
+// CVs never pay the cost of fetching this font. Falls back to jsPDF's
+// built-in Helvetica (Latin-only) if the fetch fails for any reason —
+// Myanmar-script field values just won't render correctly in that case,
+// but PDF generation itself never breaks.
+const MYANMAR_PDF_FONT_URL = 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-myanmar@latest/myanmar-400-normal.ttf';
+let myanmarPdfFontPromise = null;
+function loadMyanmarPdfFontBase64() {
+  if (!myanmarPdfFontPromise) {
+    myanmarPdfFontPromise = (async () => {
+      const res = await fetch(MYANMAR_PDF_FONT_URL);
+      if (!res.ok) throw new Error('Myanmar PDF font fetch failed: ' + res.status);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    })();
+  }
+  return myanmarPdfFontPromise;
+}
+
+/**
+ * Rows shown in the Myanmar Local template's numbered personal-information
+ * block — shared between the live HTML preview and the PDF generator so
+ * they can never drift out of sync. Only fields the person actually filled
+ * in (and, for NRC/DOB/Gender, chose to show) are included.
+ */
+function getMyanmarLocalRows(cv) {
+  const p = cv.personal;
+  return [
+    ['Name', p.fullName],
+    ["Father's Name", p.fatherName],
+    ['NRC No.', p.showNrc ? p.nrc : ''],
+    ['Date of Birth', p.showDateOfBirth && p.dateOfBirth ? formatDate(p.dateOfBirth) : ''],
+    ['Gender', p.showGender ? p.gender : ''],
+    ['Nationality', p.nationality],
+    ['Race', p.race],
+    ['Religion', p.religion],
+    ['Marital Status', p.maritalStatus],
+    ['Blood Group', p.bloodGroup],
+    ['Height', p.height],
+    ['Weight', p.weight],
+    ['Phone', p.phone],
+    ['Email', p.email],
+    ['Address', p.location],
+  ].filter(([, value]) => value);
+}
 
 const PDF_PAGE = { w: 210, h: 297, marginX: 18, marginTop: 18, marginBottom: 18 };
 
@@ -1721,7 +1949,19 @@ function maskImageToShape(dataUrl, shape) {
 async function generateCvPdf(cv) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const style = PDF_TEMPLATE_STYLES[cv.template] || PDF_TEMPLATE_STYLES.modern;
+  const style = Object.assign({}, PDF_TEMPLATE_STYLES[cv.template] || PDF_TEMPLATE_STYLES.modern);
+
+  if (cv.template === 'myanmar-local') {
+    try {
+      const base64Font = await loadMyanmarPdfFontBase64();
+      doc.addFileToVFS('NotoSansMyanmar-Regular.ttf', base64Font);
+      doc.addFont('NotoSansMyanmar-Regular.ttf', 'NotoSansMyanmar', 'normal');
+      doc.addFont('NotoSansMyanmar-Regular.ttf', 'NotoSansMyanmar', 'bold'); // reuses the regular weight file — avoids a second fetch just for bold
+      style.font = 'NotoSansMyanmar';
+    } catch (err) {
+      console.warn('NeonCV: Myanmar PDF font failed to load, falling back to the default font', err);
+    }
+  }
   const { w: pageW, h: pageH, marginX, marginTop, marginBottom } = PDF_PAGE;
   const contentW = pageW - marginX * 2;
   const centered = style.align === 'center';
@@ -1764,66 +2004,135 @@ async function generateCvPdf(cv) {
 
   const p = cv.personal;
 
-  // Photo (drawn to the left of the name for left-aligned templates,
-  // centered above the name for the centered Classic template).
-  let photoDataUrl = null;
-  if (p.showPhoto && p.photo) {
-    try {
-      const normalized = await normalizePhotoForPdf(p.photo);
-      photoDataUrl = await maskImageToShape(normalized, p.photoShape || 'circle');
-    } catch (err) { photoDataUrl = null; }
-  }
-  const photoSize = 24;
-  let nameStartX = textX;
-  if (photoDataUrl && !centered) {
-    try {
-      doc.addImage(photoDataUrl, 'PNG', marginX, y, photoSize, photoSize);
-      nameStartX = marginX + photoSize + 8;
-    } catch (err) { /* skip photo, continue with text */ }
-  } else if (photoDataUrl && centered) {
-    try {
-      doc.addImage(photoDataUrl, 'PNG', (pageW - photoSize) / 2, y, photoSize, photoSize);
-      y += photoSize + 6;
-    } catch (err) { /* skip photo */ }
-  }
+  if (cv.template === 'myanmar-local') {
+    const org = cv.orgHeader;
+    if (org.organizationName) {
+      setFont('bold', 13, style.name);
+      doc.text(org.organizationName.toUpperCase(), pageW / 2, y, { align: 'center' });
+      y += 6;
+    }
+    if (org.department) {
+      setFont('normal', 10, [51, 65, 85]);
+      doc.text(org.department, pageW / 2, y, { align: 'center' });
+      y += 5.5;
+    }
+    const formTitle = org.formTitle || 'Personal Record Form';
+    setFont('bold', 12, style.name);
+    doc.text(formTitle, pageW / 2, y, { align: 'center' });
+    const titleW = doc.getTextWidth(formTitle);
+    doc.setDrawColor(11, 18, 32);
+    doc.setLineWidth(0.3);
+    doc.line(pageW / 2 - titleW / 2, y + 1.2, pageW / 2 + titleW / 2, y + 1.2);
+    y += 10;
 
-  const headerTextAlign = (photoDataUrl && !centered) ? 'left' : textAlign;
-  const headerX = (photoDataUrl && !centered) ? nameStartX : textX;
-  const headerTopY = y;
+    // Photo box, top-right — square, matching the local document convention
+    // (not clipped to the CV's circle/rounded shape, which is a preview-only
+    // choice for the international templates).
+    let localPhotoUrl = null;
+    if (p.showPhoto && p.photo) {
+      try { localPhotoUrl = await normalizePhotoForPdf(p.photo); } catch (err) { localPhotoUrl = null; }
+    }
+    const boxW = 28, boxH = 34;
+    const boxX = pageW - marginX - boxW, boxY = y;
+    doc.setDrawColor(11, 18, 32);
+    doc.setLineWidth(0.3);
+    doc.rect(boxX, boxY, boxW, boxH);
+    if (localPhotoUrl) {
+      try {
+        doc.addImage(localPhotoUrl, 'PNG', boxX, boxY, boxW, boxH);
+        doc.setDrawColor(11, 18, 32);
+        doc.rect(boxX, boxY, boxW, boxH); // redraw the border on top of the image
+      } catch (err) { /* box stays empty */ }
+    }
 
-  setFont('bold', 19, style.name);
-  doc.text(p.fullName || 'Your Name', headerX, y, { align: headerTextAlign }); y += 7;
-  if (p.jobTitle) { setFont('normal', 11, style.heading); doc.text(p.jobTitle, headerX, y, { align: headerTextAlign }); y += 6; }
-  const contactBits = [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean).join('   ·   ');
-  if (contactBits) {
-    setFont('normal', 9, [100, 116, 139]);
-    doc.splitTextToSize(contactBits, contentW - (headerX - marginX)).forEach((line) => {
-      doc.text(line, headerX, y, { align: headerTextAlign }); y += 5;
+    const rows = getMyanmarLocalRows(cv);
+    const numberColW = 8, labelColW = 42;
+    rows.forEach((rowData, i) => {
+      ensureSpace(6);
+      setFont('normal', 9, [100, 116, 139]);
+      doc.text(String(i + 1) + '.', marginX, y);
+      setFont('normal', 9.5, [51, 65, 85]);
+      doc.text(rowData[0], marginX + numberColW, y);
+      setFont('bold', 9.5, [15, 23, 42]);
+      const valueLines = doc.splitTextToSize(rowData[1], contentW - boxW - 8 - numberColW - labelColW);
+      doc.text(valueLines, marginX + numberColW + labelColW, y);
+      y += 5.6 * valueLines.length;
     });
-  }
-  const extraBits = [];
-  if (p.showNrc && p.nrc) extraBits.push('NRC: ' + p.nrc);
-  if (p.showDateOfBirth && p.dateOfBirth) extraBits.push('DOB: ' + formatDate(p.dateOfBirth));
-  if (p.showGender && p.gender) extraBits.push(p.gender);
-  if (extraBits.length) {
-    setFont('normal', 9, [100, 116, 139]);
-    doc.text(extraBits.join('   ·   '), headerX, y, { align: headerTextAlign }); y += 5;
-  }
+    y = Math.max(y, boxY + boxH + 4);
 
-  if (photoDataUrl && !centered) y = Math.max(y, headerTopY + photoSize);
+    if (p.jobTitle) {
+      ensureSpace(7);
+      setFont('bold', 9.5, [15, 23, 42]);
+      doc.text('Applied Position: ' + p.jobTitle, marginX, y);
+      y += 6;
+    }
+    y += 3;
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 8;
+  } else {
+    // Photo (drawn to the left of the name for left-aligned templates,
+    // centered above the name for the centered Classic template).
+    let photoDataUrl = null;
+    if (p.showPhoto && p.photo) {
+      try {
+        const normalized = await normalizePhotoForPdf(p.photo);
+        photoDataUrl = await maskImageToShape(normalized, p.photoShape || 'circle');
+      } catch (err) { photoDataUrl = null; }
+    }
+    const photoSize = 24;
+    let nameStartX = textX;
+    if (photoDataUrl && !centered) {
+      try {
+        doc.addImage(photoDataUrl, 'PNG', marginX, y, photoSize, photoSize);
+        nameStartX = marginX + photoSize + 8;
+      } catch (err) { /* skip photo, continue with text */ }
+    } else if (photoDataUrl && centered) {
+      try {
+        doc.addImage(photoDataUrl, 'PNG', (pageW - photoSize) / 2, y, photoSize, photoSize);
+        y += photoSize + 6;
+      } catch (err) { /* skip photo */ }
+    }
 
-  y += 4;
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.3);
-  doc.line(marginX, y, pageW - marginX, y);
-  y += 8;
+    const headerTextAlign = (photoDataUrl && !centered) ? 'left' : textAlign;
+    const headerX = (photoDataUrl && !centered) ? nameStartX : textX;
+    const headerTopY = y;
+
+    setFont('bold', 19, style.name);
+    doc.text(p.fullName || 'Your Name', headerX, y, { align: headerTextAlign }); y += 7;
+    if (p.jobTitle) { setFont('normal', 11, style.heading); doc.text(p.jobTitle, headerX, y, { align: headerTextAlign }); y += 6; }
+    const contactBits = [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean).join('   ·   ');
+    if (contactBits) {
+      setFont('normal', 9, [100, 116, 139]);
+      doc.splitTextToSize(contactBits, contentW - (headerX - marginX)).forEach((line) => {
+        doc.text(line, headerX, y, { align: headerTextAlign }); y += 5;
+      });
+    }
+    const extraBits = [];
+    if (p.showNrc && p.nrc) extraBits.push('NRC: ' + p.nrc);
+    if (p.showDateOfBirth && p.dateOfBirth) extraBits.push('DOB: ' + formatDate(p.dateOfBirth));
+    if (p.showGender && p.gender) extraBits.push(p.gender);
+    if (extraBits.length) {
+      setFont('normal', 9, [100, 116, 139]);
+      doc.text(extraBits.join('   ·   '), headerX, y, { align: headerTextAlign }); y += 5;
+    }
+
+    if (photoDataUrl && !centered) y = Math.max(y, headerTopY + photoSize);
+
+    y += 4;
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 8;
+  }
 
   const enabledOrdered = cv.sectionOrder.filter((key) => cv.sectionEnabled[key] && key !== 'personal');
 
   enabledOrdered.forEach((key) => {
     if (key === 'summary') {
       if (!cv.summary.trim()) return;
-      heading('Summary');
+      heading(cv.template === 'myanmar-local' ? 'Objective / Remarks' : 'Summary');
       paragraph(cv.summary, 10, 'normal', [51, 65, 85], 5);
       y += 4;
       return;
@@ -1846,10 +2155,12 @@ async function generateCvPdf(cv) {
         const title = schema.title(entry);
         const subtitle = schema.subtitle(entry) || '';
         const meta = schema.meta(entry) || '';
+        const extra = schema.extra ? (schema.extra(entry) || '') : '';
         setFont('bold', 10.5, [15, 23, 42]);
         doc.text(subtitle ? `${title} — ${subtitle}` : title, marginX, y);
         if (meta) { setFont('normal', 9, [100, 116, 139]); doc.text(meta, pageW - marginX, y, { align: 'right' }); }
         y += 5.5;
+        if (extra) paragraph(extra, 9, 'normal', [71, 85, 105], 4.6);
         const links = [entry.url, entry.credentialUrl, entry.githubUrl, entry.liveUrl].filter(Boolean).join('   ·   ');
         if (links) paragraph(links, 8.5, 'normal', [124, 58, 237], 4.5);
         if (entry.description) paragraph(entry.description, 9.5, 'normal', [51, 65, 85], 4.8);

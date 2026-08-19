@@ -131,6 +131,48 @@ textarea:focus-visible {
   border-bottom: none;
 }
 
+/* ---------- Template: Myanmar Local ----------
+   Structural conventions inspired by common Myanmar CV/application
+   documents: centered organization header, a numbered colon-aligned
+   personal-information block, and a photo box in the body rather than
+   inline with the name. Not a copy of any single reference document. */
+.template-myanmar-local { font-family: 'Noto Sans Myanmar', 'Padauk', Georgia, serif; }
+.template-myanmar-local .mlocal-header { text-align: center; border-bottom: 2px solid #0B1220; padding-bottom: 12px; margin-bottom: 16px; position: relative; }
+.template-myanmar-local .mlocal-logo { max-height: 40px; max-width: 120px; margin: 0 auto 6px; display: block; object-fit: contain; }
+.template-myanmar-local .mlocal-org { font-size: 13px; font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 0.02em; }
+.template-myanmar-local .mlocal-dept { font-size: 11.5px; margin: 2px 0 0; color: #334155; }
+.template-myanmar-local .mlocal-form-title { font-size: 14px; font-weight: 700; margin: 8px 0 0; text-decoration: underline; }
+.template-myanmar-local .mlocal-body { display: flex; gap: 16px; align-items: flex-start; }
+.template-myanmar-local .mlocal-photo-box {
+  width: 88px; height: 108px; flex-shrink: 0; border: 1px solid #0B1220;
+  background: #F8FAFC; overflow: hidden; order: 2;
+}
+.template-myanmar-local .mlocal-photo-box img { width: 100%; height: 100%; object-fit: cover; }
+.template-myanmar-local .mlocal-photo-empty::after {
+  content: 'Photo'; display: flex; align-items: center; justify-content: center;
+  height: 100%; font-size: 10px; color: #94A3B8;
+}
+.template-myanmar-local .mlocal-fields { flex: 1; list-style: none; margin: 0; padding: 0; counter-reset: mlocal-counter; }
+.template-myanmar-local .mlocal-row {
+  counter-increment: mlocal-counter;
+  display: flex; align-items: baseline; gap: 6px; font-size: 12px; line-height: 1.7;
+}
+.template-myanmar-local .mlocal-row::before {
+  content: counter(mlocal-counter) '.'; color: #64748B; width: 16px; flex-shrink: 0; font-size: 11px;
+}
+.template-myanmar-local .mlocal-label { width: 118px; flex-shrink: 0; color: #334155; }
+.template-myanmar-local .mlocal-colon { flex-shrink: 0; color: #94A3B8; }
+.template-myanmar-local .mlocal-value { font-weight: 600; color: #0F172A; }
+.template-myanmar-local .mlocal-applied-for { display: flex; gap: 6px; font-size: 12px; margin: 12px 0 0; padding-top: 8px; border-top: 1px dashed #CBD5E1; }
+.template-myanmar-local .mlocal-applied-for .mlocal-label { width: 118px; color: #334155; }
+.template-myanmar-local .mlocal-applied-for .mlocal-value { font-weight: 700; }
+.template-myanmar-local .cv-heading { color: #0B1220; border-bottom: 1.5px solid #0B1220; text-transform: uppercase; letter-spacing: 0.04em; }
+
+@media screen and (max-width: 560px) {
+  .template-myanmar-local .mlocal-body { flex-direction: column-reverse; align-items: center; }
+  .template-myanmar-local .mlocal-label { width: 96px; }
+}
+
 /* ============================================================
    PRINT
    ============================================================ */

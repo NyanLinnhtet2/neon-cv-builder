@@ -16,7 +16,8 @@ Create tailored, professional CVs for job applications, internships, scholarship
 - **CV Readiness** — a live completion indicator showing which required and recommended sections still need attention.
 - **Live preview** — every change in the editor updates a true-to-scale A4 CV instantly, with no page reload.
 - **15+ content sections** — personal info, summary, experience, internships, education, skills, projects, certifications, awards, languages, volunteer work, research, publications, conferences, and references, each fully add/edit/delete-able.
-- **Three templates** — Modern, Classic, and Academic, each with a genuinely different layout and photo placement, plus a mini live-style preview thumbnail in the picker. Switch anytime without losing data.
+- **Four templates** — Modern, Classic, Academic, and **Myanmar Local**, each with a genuinely different layout and photo placement, plus a mini live-style preview thumbnail in the picker. Switch anytime without losing data.
+- **Myanmar Local CV** — a dedicated document structure (not just "international + NRC"), inspired by real Myanmar CV/application-form conventions: a numbered, colon-aligned personal-information block (Father's Name, NRC, Date of Birth, Gender, Nationality, Race, Religion, Marital Status, Blood Group, Height, Weight — all optional, only shown if you fill them in), a photo box, and a **dynamic organization header** (organization/ministry/company name, department, form title, optional logo) that updates the live preview and PDF instantly. The PDF embeds a proper Myanmar Unicode font so Myanmar-script text renders correctly, not as empty boxes.
 - **Multiple CVs from one profile** — create, duplicate, rename, and delete as many CV versions as you need.
 - **Autosave** — changes are saved to your browser automatically, with a clear "Saving… / Saved" indicator.
 - **Inline validation** — friendly, non-intrusive error messages instead of browser alert boxes.
